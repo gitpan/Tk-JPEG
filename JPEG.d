@@ -1,1 +1,0 @@
-JPEG.o: JPEG.c
