@@ -41,7 +41,7 @@
  * Author: Tom Lane (tgl@sss.pgh.pa.us)
  *
  * Modified for dynamical loading, reading from channels and Tcl_Obj's by:
- *	Jan Nijtmans (Jan.Nijtmans@wxs.nl)
+ *	Jan Nijtmans (j.nijtmans@chello.nl)
  *
  * SCCS: @(#) imgJPEG.c
  */
@@ -87,17 +87,17 @@
  * The format record for the JPEG file format:
  */
 
-static int	ChnMatchJPEG _ANSI_ARGS_((Tcl_Interp *interp, Tcl_Channel chan, 
+static int	ChnMatchJPEG _ANSI_ARGS_((Tcl_Interp *interp, Tcl_Channel chan,
 		    Tcl_Obj *fileName,
 		    Tcl_Obj *format, int *widthPtr, int *heightPtr));
-static int	ObjMatchJPEG _ANSI_ARGS_((Tcl_Interp *interp, Tcl_Obj *dataObj,
+static int	ObjMatchJPEG _ANSI_ARGS_((Tcl_Interp *interp, Tcl_Obj *data,
 		    Tcl_Obj *format, int *widthPtr, int *heightPtr));
 static int	ChnReadJPEG _ANSI_ARGS_((Tcl_Interp *interp,
 		    Tcl_Channel chan, Tcl_Obj *fileName, Tcl_Obj *format,
 		    Tk_PhotoHandle imageHandle, int destX, int destY,
 		    int width, int height, int srcX, int srcY));
 static int	ObjReadJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    Tcl_Obj *dataObj, Tcl_Obj *format,
+		    Tcl_Obj *data, Tcl_Obj *format,
 		    Tk_PhotoHandle imageHandle, int destX, int destY,
 		    int width, int height, int srcX, int srcY));
 static int	ChnWriteJPEG _ANSI_ARGS_((Tcl_Interp *interp,
@@ -108,7 +108,7 @@ static int	StringWriteJPEG _ANSI_ARGS_((Tcl_Interp *interp,
 		    Tk_PhotoImageBlock *blockPtr));
 
 Tk_PhotoImageFormat imgFmtJPEG = {
-    "JPEG",					/* name */
+    "jpeg",					/* name */
     ChnMatchJPEG,	/* fileMatchProc */
     ObjMatchJPEG,	/* stringMatchProc */
     ChnReadJPEG,	/* fileReadProc */
@@ -180,8 +180,8 @@ static int	CreateDecompress _ANSI_ARGS_((j_decompress_ptr, int, size_t));
 
 /*
  * Stuff to support dynamic loading of libjpeg
- */           
-#ifndef _LANG 
+ */
+#ifndef _LANG
 
 static struct JpegFunctions {
     VOID *handle;
@@ -285,7 +285,7 @@ static char *symbols[] = {
     "jpeg_abort",
 #endif
     (char *) NULL
-};            
+};
 
 
 
@@ -649,6 +649,9 @@ ChnMatchJPEG(interp, chan, fileName, format, widthPtr, heightPtr)
 				 * JPEG file. */
 {
     MFile handle;
+
+    ImgFixChanMatchProc(&interp, &chan, &fileName, &format, &widthPtr, &heightPtr);
+
     handle.data = (char *) chan;
     handle.state = IMG_CHAN;
     return CommonMatchJPEG(&handle, widthPtr, heightPtr);
@@ -674,16 +677,19 @@ ChnMatchJPEG(interp, chan, fileName, format, widthPtr, heightPtr)
  */
 
 static int
-ObjMatchJPEG(interp, dataObj, format, widthPtr, heightPtr)
+ObjMatchJPEG(interp, data, format, widthPtr, heightPtr)
     Tcl_Interp *interp;
-    Tcl_Obj *dataObj;		/* the object containing the image data */
+    Tcl_Obj *data;		/* the object containing the image data */
     Tcl_Obj *format;		/* User-specified format object, or NULL. */
     int *widthPtr, *heightPtr;	/* The dimensions of the image are
 				 * returned here if the string is a valid
 				 * JPEG image. */
 {
     MFile handle;
-    ImgReadInit(dataObj, '\377', &handle);
+
+    ImgFixObjMatchProc(&interp, &data, &format, &widthPtr, &heightPtr);
+
+    ImgReadInit(data, '\377', &handle);
     return CommonMatchJPEG(&handle, widthPtr, heightPtr);
 }
 
@@ -1095,11 +1101,8 @@ ChnWriteJPEG(interp, fileName, format, blockPtr)
 	return TCL_ERROR;
     }
 
-    chan = Tcl_OpenFileChannel(interp, fileName, "w", 0644);
+    chan = ImgOpenFileChannel(interp, fileName, 0644);
     if (!chan) {
-	return TCL_ERROR;
-    }
-    if (Tcl_SetChannelOption(interp, chan, "-translation", "binary") != TCL_OK) {
 	return TCL_ERROR;
     }
 
@@ -1163,10 +1166,13 @@ StringWriteJPEG(interp, dataPtr, format, blockPtr)
     struct jpeg_compress_struct cinfo; /* libjpeg's parameter structure */
     struct my_error_mgr jerror;	/* for controlling libjpeg error handling */
     int result;
+    Tcl_DString data;
 
     if (load_jpeg_library(interp) != TCL_OK) {
 	return TCL_ERROR;
     }
+
+    ImgFixStringWriteProc(&data, &interp, &dataPtr, &format, &blockPtr);
 
     /* Initialize JPEG error handler */
     /* We set up the normal JPEG error routines, then override error_exit. */
@@ -1179,8 +1185,8 @@ StringWriteJPEG(interp, dataPtr, format, blockPtr)
       /* If we get here, the JPEG code has signaled an error. */
       Tcl_AppendResult(interp, "couldn't write JPEG string: ", (char *) NULL);
       append_jpeg_message(interp, (j_common_ptr) &cinfo);
-      jpeg_destroy_compress(&cinfo);
-      return TCL_ERROR;
+      result = TCL_ERROR;
+      goto writeend;
     }
 
     /* Now we can initialize libjpeg. */
@@ -1191,7 +1197,16 @@ StringWriteJPEG(interp, dataPtr, format, blockPtr)
     /* Share code with ChnWriteJPEG. */
     result = CommonWriteJPEG(interp, &cinfo, format, blockPtr);
 
+writeend:
+
     jpeg_destroy_compress(&cinfo);
+    if (dataPtr == &data) {
+	if (result == TCL_OK) {
+	    Tcl_DStringResult(interp, dataPtr);
+	} else {
+	    Tcl_DStringFree(dataPtr);
+	}
+    }
 
     return result;
 }
@@ -1315,7 +1330,7 @@ CommonWriteJPEG(interp, cinfo, format, blockPtr)
     }
 
     jpeg_start_compress(cinfo, TRUE);
-    
+
     /* note: we assume libjpeg is configured for standard RGB pixel order. */
     if ((greenOffset == 1) && (blueOffset == 2)
 	&& (blockPtr->pixelSize == 3)) {

@@ -3,6 +3,7 @@ JPEG.xs
 MANIFEST
 MANIFEST.SKIP
 Makefile.PL
+Nick.jpg
 README
 imgJPEG.c
 jpeg/Makefile.PL

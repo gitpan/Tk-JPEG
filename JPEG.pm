@@ -6,7 +6,7 @@ require Tk::Photo;
 require DynaLoader;
 
 use vars qw($VERSION $XS_VERSION);
-$VERSION = '2.013'; # $Id: //depot/tkJPEG/JPEG.pm#13$
+$VERSION = '2.014'; # $Id: //depot/tkJPEG/JPEG.pm#14 $
 
 @ISA = qw(DynaLoader);
 
@@ -19,7 +19,7 @@ __END__
 
 =head1 NAME
 
-Tk::JPEG - JPEG loader for Tk::Photo 
+Tk::JPEG - JPEG loader for Tk::Photo
 
 =head1 SYNOPSIS
 
@@ -27,7 +27,7 @@ Tk::JPEG - JPEG loader for Tk::Photo
   use Tk::JPEG;
 
   my $image = $widget->Photo('-format' => 'jpeg', -file => 'something.jpg');
-  
+
 
 =head1 DESCRIPTION
 

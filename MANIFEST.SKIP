@@ -12,3 +12,4 @@ jpeg/jconfig\.h$
 jpeg/testout
 jpeg/(cjpeg|djpeg|rdjpgcom|wrjpgcom|jpegtran)$
 \.tar\.gz$
+nick.jpg
