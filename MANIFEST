@@ -36,6 +36,7 @@ jpeg/jcmainct.c
 jpeg/jcmarker.c
 jpeg/jcmaster.c
 jpeg/jcomapi.c
+jpeg/jconfig.b32
 jpeg/jconfig.bcc
 jpeg/jconfig.cfg
 jpeg/jconfig.dj
@@ -44,6 +45,7 @@ jpeg/jconfig.manx
 jpeg/jconfig.mc6
 jpeg/jconfig.sas
 jpeg/jconfig.st
+jpeg/jconfig.v32
 jpeg/jconfig.vc
 jpeg/jconfig.vms
 jpeg/jconfig.wat
@@ -103,14 +105,17 @@ jpeg/libjpeg.doc
 jpeg/makcjpeg.st
 jpeg/makdjpeg.st
 jpeg/makefile.ansi
+jpeg/makefile.b32
 jpeg/makefile.bcc
 jpeg/makefile.cfg
 jpeg/makefile.dj
 jpeg/makefile.manx
 jpeg/makefile.mc6
+jpeg/makefile.mingw32
 jpeg/makefile.mms
 jpeg/makefile.sas
 jpeg/makefile.unix
+jpeg/makefile.v32
 jpeg/makefile.vc
 jpeg/makefile.vms
 jpeg/makefile.wat

@@ -5,7 +5,7 @@ require Tk::Image;
 require Tk::Photo;
 
 use vars qw($VERSION);
-$VERSION = '2.011'; # $Id: //depot/tkJPEG/JPEG.pm#10$
+$VERSION = '2.012'; # $Id: //depot/tkJPEG/JPEG.pm#11$
 
 @ISA = qw(DynaLoader);
 
