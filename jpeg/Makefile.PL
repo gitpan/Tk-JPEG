@@ -1,5 +1,5 @@
 unless (-f "Makefile")
  {
-  system("configure");
+  system("./configure");
  }
 1;
