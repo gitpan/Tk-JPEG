@@ -9,6 +9,8 @@
 #define volatile
 #endif
 
+#define TK_PHOTO_FILE FILE
+
 static char sccsid[] = "@(#) tkImgFmtJPG.c 1.9 95/08/30 15:34:52";
 
 #include <setjmp.h>
