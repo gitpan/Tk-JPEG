@@ -1,9 +1,9 @@
-This is an extension for Tk800.* which supplies
+This is an extension for Tk800.005 and later which supplies
 JPEG format loader for Photo image type.
 
 (Please use earlier Tk::JPEG with Tk40?.*)
 
-The sub-directory jpeg is release 5 of the The Independent JPEG Group's (IJG)
+The sub-directory jpeg is release 6a of the The Independent JPEG Group's (IJG)
 free JPEG software with only the addition of a (dubious) Makefile.PL.  
 
 This package is not distributed with perl/Tk due to different portability

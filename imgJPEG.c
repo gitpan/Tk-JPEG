@@ -88,49 +88,39 @@
  * The format record for the JPEG file format:
  */
 
-static int	ChnMatchJPEG _ANSI_ARGS_((Tcl_Channel chan, char *fileName,
-		    char *formatString, int *widthPtr, int *heightPtr));
-static int	FileMatchJPEG _ANSI_ARGS_((FILE *f, char *fileName,
-		    char *formatString, int *widthPtr, int *heightPtr));
-static int	ObjMatchJPEG _ANSI_ARGS_((struct Tcl_Obj *dataObj,
-		    char *formatString, int *widthPtr, int *heightPtr));
+static int	ChnMatchJPEG _ANSI_ARGS_((Tcl_Interp *interp, Tcl_Channel chan, Arg fileName,
+		    Arg formatString, int *widthPtr, int *heightPtr));
+static int	FileMatchJPEG _ANSI_ARGS_((Tcl_Interp *interp, FILE *f, Arg fileName,
+		    Arg formatString, int *widthPtr, int *heightPtr));
+static int	ObjMatchJPEG _ANSI_ARGS_((Tcl_Interp *interp, struct Tcl_Obj *dataObj,
+		    Arg formatString, int *widthPtr, int *heightPtr));
 static int	ChnReadJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    Tcl_Channel chan, char *fileName, char *formatString,
+		    Tcl_Channel chan, Arg fileName, Arg formatString,
 		    Tk_PhotoHandle imageHandle, int destX, int destY,
 		    int width, int height, int srcX, int srcY));
 static int	FileReadJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    FILE *f, char *fileName, char *formatString,
+		    FILE *f, Arg fileName, Arg formatString,
 		    Tk_PhotoHandle imageHandle, int destX, int destY,
 		    int width, int height, int srcX, int srcY));
 static int	ObjReadJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    struct Tcl_Obj *dataObj, char *formatString,
+		    struct Tcl_Obj *dataObj, Arg formatString,
 		    Tk_PhotoHandle imageHandle, int destX, int destY,
 		    int width, int height, int srcX, int srcY));
 static int	FileWriteJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    char *fileName, char *formatString,
+		    char *fileName, Arg formatString,
 		    Tk_PhotoImageBlock *blockPtr));
 static int	StringWriteJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    Tcl_DString *dataPtr, char *formatString,
+		    Tcl_DString *dataPtr, Arg formatString,
 		    Tk_PhotoImageBlock *blockPtr));
 
 Tk_PhotoImageFormat imgFmtJPEG = {
     "JPEG",					/* name */
-    (Tk_ImageFileMatchProc *) ChnMatchJPEG,	/* fileMatchProc */
-    (Tk_ImageStringMatchProc *) ObjMatchJPEG,	/* stringMatchProc */
-    (Tk_ImageFileReadProc *) ChnReadJPEG,	/* fileReadProc */
-    (Tk_ImageStringReadProc *) ObjReadJPEG,	/* stringReadProc */
-    FileWriteJPEG,				/* fileWriteProc */
-    (Tk_ImageStringWriteProc *) StringWriteJPEG,/* stringWriteProc */
-};
-
-Tk_PhotoImageFormat imgOldFmtJPEG = {
-    "JPEG",					/* name */
-    (Tk_ImageFileMatchProc *) FileMatchJPEG,	/* fileMatchProc */
-    (Tk_ImageStringMatchProc *) ObjMatchJPEG,	/* stringMatchProc */
-    (Tk_ImageFileReadProc *) FileReadJPEG,	/* fileReadProc */
-    (Tk_ImageStringReadProc *) ObjReadJPEG,	/* stringReadProc */
-    FileWriteJPEG,				/* fileWriteProc */
-    (Tk_ImageStringWriteProc *) StringWriteJPEG,	/* stringWriteProc */
+    ChnMatchJPEG,	/* fileMatchProc */
+    ObjMatchJPEG,	/* stringMatchProc */
+    ChnReadJPEG,	/* fileReadProc */
+    ObjReadJPEG,	/* stringReadProc */
+    FileWriteJPEG,	/* fileWriteProc */
+    StringWriteJPEG	/* stringWriteProc */
 };
 
 /*
@@ -224,11 +214,11 @@ struct my_error_mgr {		/* Extended libjpeg error manager */
 static int	CommonMatchJPEG _ANSI_ARGS_((MFile *handle,
 		    int *widthPtr, int *heightPtr));
 static int	CommonReadJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    j_decompress_ptr cinfo, char *formatString,
+		    j_decompress_ptr cinfo, Arg formatString,
 		    Tk_PhotoHandle imageHandle, int destX, int destY,
 		    int width, int height, int srcX, int srcY));
 static int	CommonWriteJPEG _ANSI_ARGS_((Tcl_Interp *interp,
-		    j_compress_ptr cinfo, char *formatString,
+		    j_compress_ptr cinfo, Arg formatString,
 		    Tk_PhotoImageBlock *blockPtr));
 static void	jpeg_obj_src _ANSI_ARGS_((j_decompress_ptr, struct Tcl_Obj *));
 static boolean	str_fill_input_buffer _ANSI_ARGS_((j_decompress_ptr));
@@ -481,10 +471,11 @@ Imgjpeg_write_scanlines(a,b,c)
  */
 
 static int
-FileMatchJPEG(f, fileName, formatString, widthPtr, heightPtr)
+FileMatchJPEG(interp, f, fileName, formatString, widthPtr, heightPtr)
+    Tcl_Interp *interp;
     FILE *f;			/* The image file, open for reading. */
-    char *fileName;		/* The name of the image file. */
-    char *formatString;		/* User-specified format string, or NULL. */
+    Arg fileName;		/* The name of the image file. */
+    Arg formatString;		/* User-specified format string, or NULL. */
     int *widthPtr, *heightPtr;	/* The dimensions of the image are
 				 * returned here if the file is a valid
 				 * JPEG file. */
@@ -515,10 +506,11 @@ FileMatchJPEG(f, fileName, formatString, widthPtr, heightPtr)
  */
 
 static int
-ChnMatchJPEG(chan, fileName, formatString, widthPtr, heightPtr)
+ChnMatchJPEG(interp, chan, fileName, formatString, widthPtr, heightPtr)
+    Tcl_Interp *interp;
     Tcl_Channel chan;		/* The image channel, open for reading. */
-    char *fileName;		/* The name of the image file. */
-    char *formatString;		/* User-specified format string, or NULL. */
+    Arg fileName;		/* The name of the image file. */
+    Arg formatString;		/* User-specified format string, or NULL. */
     int *widthPtr, *heightPtr;	/* The dimensions of the image are
 				 * returned here if the file is a valid
 				 * JPEG file. */
@@ -529,105 +521,6 @@ ChnMatchJPEG(chan, fileName, formatString, widthPtr, heightPtr)
     return CommonMatchJPEG(&handle, widthPtr, heightPtr);
 }
    
-
-int
-ImgWrite(handle, src, count)
-    MFile *handle;	/* mmencode "file" handle */
-    CONST char *src;	/* where to get the data */
-    int count;		/* number of bytes */
-{
-    register int i;
-    int curcount, bufcount;
-
-    switch (handle->state) {
-	case IMG_CHAN:
-	    return Tcl_Write((Tcl_Channel) handle->data, (char *) src, count);
-    }
-    curcount = handle->data - Tcl_DStringValue(handle->buffer);
-    bufcount = curcount + count + count/3 + count/52 + 1024;
-
-    /* make sure that the DString contains enough space */
-    if (bufcount >= Tcl_DStringLength(handle->buffer)) {
-	Tcl_DStringSetLength(handle->buffer, bufcount + 4096);
-	handle->data = Tcl_DStringValue(handle->buffer) + curcount;
-    }
-    /* write the data */
-    for (i=0; (i<count) && (ImgPutc(*src++, handle) != IMG_DONE); i++) {
-	/* empty loop body */
-    }
-    return i;
-}
-
-int
-ImgPutc(c, handle)
-    register int c;		/* character to be written */
-    register MFile *handle;	/* handle containing decoder data and state */
-{
-    return c & 0xff;
-}
-
-int
-ImgReadInit(dataObj, c, handle)
-struct Tcl_Obj *dataObj;	/* string containing initial mmencoded data */
-int c;
-MFile *handle;		/* mmdecode "file" handle */
-{
- handle->data = ImgGetStringFromObj(dataObj, &handle->length);
- handle->state = IMG_STRING;
- return 1;
-}
-
-int
-ImgRead(handle, dst, count)
-    MFile *handle;	/* mmdecode "file" handle */
-    VOID *dst;		/* where to put the result */
-    int count;		/* number of bytes */
-{
-    register int i, c;
-    char *cdst = (char *) dst;
-    switch (handle->state) {
-      case IMG_STRING:
-	if (count > handle->length) {
-	    count = handle->length;
-	}
-	if (count) {
-	    memcpy(dst, handle->data, count);
-	    handle->length -= count;
-	    handle->data += count;
-	}
-	return count;
-      case IMG_CHAN:
-	return Tcl_Read((Tcl_Channel) handle->data, dst, count);
-    }
-
-    for(i=0; i<count && (c=ImgGetc(handle)) != IMG_DONE; i++) {
-	*cdst++ = c;
-    }
-    return i;
-}
-
-int
-ImgGetc(handle)
-   MFile *handle;			/* Input stream handle */
-{
-    int c;
-    int result = 0;			/* Initialization needed only to prevent
-					 * gcc compiler warning */
-    if (handle->state == IMG_DONE) {
-	return IMG_DONE;
-    }
-
-    if (handle->state == IMG_STRING) {
-	if (!handle->length--) {
-	    handle->state = IMG_DONE;
-	    return IMG_DONE;
-	}
-	return *handle->data++;
-    }
- return IMG_DONE;
-}
-
-
 
 /*
  *----------------------------------------------------------------------
@@ -649,9 +542,10 @@ ImgGetc(handle)
  */
 
 static int
-ObjMatchJPEG(dataObj, formatString, widthPtr, heightPtr)
+ObjMatchJPEG(interp, dataObj, formatString, widthPtr, heightPtr)
+    Tcl_Interp *interp;
     struct Tcl_Obj *dataObj;	/* the object containing the image data */
-    char *formatString;		/* User-specified format string, or NULL. */
+    Arg formatString;		/* User-specified format string, or NULL. */
     int *widthPtr, *heightPtr;	/* The dimensions of the image are
 				 * returned here if the string is a valid
 				 * JPEG image. */
@@ -764,8 +658,8 @@ ChnReadJPEG(interp, chan, fileName, formatString, imageHandle, destX, destY,
 	width, height, srcX, srcY)
     Tcl_Interp *interp;		/* Interpreter to use for reporting errors. */
     Tcl_Channel chan;		/* The image channel, open for reading. */
-    char *fileName;		/* The name of the image file. */
-    char *formatString;		/* User-specified format string, or NULL. */
+    Arg fileName;		/* The name of the image file. */
+    Arg formatString;		/* User-specified format string, or NULL. */
     Tk_PhotoHandle imageHandle;	/* The photo image to write into. */
     int destX, destY;		/* Coordinates of top-left pixel in
 				 * photo image to be written to. */
@@ -834,8 +728,8 @@ FileReadJPEG(interp, f, fileName, formatString, imageHandle, destX, destY,
 	width, height, srcX, srcY)
     Tcl_Interp *interp;		/* Interpreter to use for reporting errors. */
     FILE *f;			/* The image file, open for reading. */
-    char *fileName;		/* The name of the image file. */
-    char *formatString;		/* User-specified format string, or NULL. */
+    Arg fileName;		/* The name of the image file. */
+    Arg formatString;		/* User-specified format string, or NULL. */
     Tk_PhotoHandle imageHandle;	/* The photo image to write into. */
     int destX, destY;		/* Coordinates of top-left pixel in
 				 * photo image to be written to. */
@@ -904,7 +798,7 @@ ObjReadJPEG(interp, dataObj, formatString, imageHandle, destX, destY,
 	width, height, srcX, srcY)
     Tcl_Interp *interp;		/* Interpreter to use for reporting errors. */
     struct Tcl_Obj *dataObj;	/* Object containing the image data. */
-    char *formatString;		/* User-specified format string, or NULL. */
+    Arg formatString;		/* User-specified format string, or NULL. */
     Tk_PhotoHandle imageHandle;	/* The photo image to write into. */
     int destX, destY;		/* Coordinates of top-left pixel in
 				 * photo image to be written to. */
@@ -972,7 +866,7 @@ CommonReadJPEG(interp, cinfo, formatString, imageHandle, destX, destY,
 	width, height, srcX, srcY)
     Tcl_Interp *interp;		/* Interpreter to use for reporting errors. */
     j_decompress_ptr cinfo;	/* Already-constructed decompress struct. */
-    char *formatString;		/* User-specified format string, or NULL. */
+    Arg formatString;		/* User-specified format string, or NULL. */
     Tk_PhotoHandle imageHandle;	/* The photo image to write into. */
     int destX, destY;		/* Coordinates of top-left pixel in
 				 * photo image to be written to. */
@@ -997,19 +891,17 @@ CommonReadJPEG(interp, cinfo, formatString, imageHandle, destX, destY,
     }
 
     /* Process format parameters to adjust decompression options. */
-    if (0 && formatString != NULL) {
+    if (formatString != NULL) {
       int argc = 0;
       Arg *args;    
-#if 0
-      if (Tcl_SplitList(interp, formatString, &argc, &args) != TCL_OK)
+      if (Tcl_ListObjGetElements(interp, formatString, &argc, &args) != TCL_OK)
 	return TCL_ERROR;
-#endif
       fast = 0;
       grayscale = 0;
+#if 0
       if (Tk_ParseArgv(interp, (Tk_Window) NULL, &argc, args,
 		       readOptTable, TK_ARGV_NO_LEFTOVERS|TK_ARGV_NO_DEFAULTS)
 	  != TCL_OK) {
-	ckfree((char *) args);
 	return TCL_ERROR;
       }
       if (fast) {
@@ -1023,7 +915,7 @@ CommonReadJPEG(interp, cinfo, formatString, imageHandle, destX, destY,
 	/* Force monochrome output. */
 	cinfo->out_color_space = JCS_GRAYSCALE;
       }
-      ckfree((char *) args);
+#endif
     }
 
     jpeg_start_decompress(cinfo);
@@ -1121,7 +1013,7 @@ static int
 FileWriteJPEG(interp, fileName, formatString, blockPtr)
     Tcl_Interp *interp;
     char *fileName;
-    char *formatString;
+    Arg formatString;
     Tk_PhotoImageBlock *blockPtr;
 {
     struct jpeg_compress_struct cinfo; /* libjpeg's parameter structure */
@@ -1196,7 +1088,7 @@ static int
 StringWriteJPEG(interp, dataPtr, formatString, blockPtr)
     Tcl_Interp *interp;
     Tcl_DString *dataPtr;
-    char *formatString;
+    Arg formatString;
     Tk_PhotoImageBlock *blockPtr;
 {
     struct jpeg_compress_struct cinfo; /* libjpeg's parameter structure */
@@ -1249,7 +1141,7 @@ static int
 CommonWriteJPEG(interp, cinfo, formatString, blockPtr)
     Tcl_Interp *interp;
     j_compress_ptr cinfo;	
-    char *formatString;
+    Arg formatString;
     Tk_PhotoImageBlock *blockPtr;
 {
     JSAMPROW row_pointer[1];	/* pointer to original data scanlines */
@@ -1281,21 +1173,19 @@ CommonWriteJPEG(interp, cinfo, formatString, blockPtr)
     jpeg_set_defaults(cinfo);
 
     /* Parse options, if any, and alter default parameters */
-    if (0 && formatString != NULL) {
+    if (formatString != NULL) {
       int argc = 0;
       Arg *args;
-#if 0
-      if (Tcl_SplitList(interp, formatString, &argc, &args) != TCL_OK)
+      if (Tcl_ListObjGetElements(interp, formatString, &argc, &args) != TCL_OK)
 	return TCL_ERROR;
-#endif
       quality = 75;		/* default values */
       smooth = 0;
       optimize = 0;
       progressive = 0;
+#if 0
       if (Tk_ParseArgv(interp, (Tk_Window) NULL, &argc, args,
 		       writeOptTable, TK_ARGV_NO_LEFTOVERS|TK_ARGV_NO_DEFAULTS)
 	  != TCL_OK) {
-	ckfree((char *) args);
 	return TCL_ERROR;
       }
       if (jpeg_set_quality != NULL) {
@@ -1314,7 +1204,7 @@ CommonWriteJPEG(interp, cinfo, formatString, blockPtr)
 	/* Select simple progressive mode. */
 	jpeg_simple_progression(cinfo);
       }
-      ckfree((char *) args);
+#endif
     }
 
     pixLinePtr = blockPtr->pixelPtr + blockPtr->offset[0];

@@ -1,11 +1,11 @@
 package Tk::JPEG;
 require DynaLoader;
-use Tk 800.000;
+use Tk 800.005;
 require Tk::Image;
 require Tk::Photo;
 
 use vars qw($VERSION);
-$VERSION = '2.008'; # $Id: //depot/tkJPEG/JPEG.pm#8$
+$VERSION = '2.010'; # $Id: //depot/tkJPEG/JPEG.pm#10$
 
 @ISA = qw(DynaLoader);
 

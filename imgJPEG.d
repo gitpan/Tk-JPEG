@@ -20,4 +20,7 @@ imgJPEG.o: imgJPEG.c \
  /usr/local/lib/perl5/sun4-solaris/5.00464/Tk/pTk/tkInt.m \
  /usr/local/lib/perl5/sun4-solaris/5.00464/Tk/pTk/tkInt_f.h \
  /usr/local/lib/perl5/sun4-solaris/5.00464/Tk/pTk/tkInt.t \
+ /usr/local/lib/perl5/sun4-solaris/5.00464/Tk/pTk/imgInt.m \
+ /usr/local/lib/perl5/sun4-solaris/5.00464/Tk/pTk/imgInt_f.h \
+ /usr/local/lib/perl5/sun4-solaris/5.00464/Tk/pTk/imgInt.t \
  jpeg/jpeglib.h jpeg/jconfig.h jpeg/jmorecfg.h jpeg/jerror.h

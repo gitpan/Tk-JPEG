@@ -13,7 +13,7 @@
 #include <pTk/tkPort.h>
 #include <pTk/tkInt.h>
 #include <pTk/tkImgPhoto.h>
-#include <pTk/tkImgPhoto.m>
+#include <pTk/imgInt.h>
 #include <pTk/tkVMacro.h>
 #include <tkGlue.h>
 #include <tkGlue.m>
@@ -22,6 +22,7 @@ extern Tk_PhotoImageFormat	imgFmtJPEG;
 
 DECLARE_VTABLES;
 TkimgphotoVtab *TkimgphotoVptr;
+ImgintVtab *ImgintVptr;
 
 MODULE = Tk::JPEG	PACKAGE = Tk::JPEG
 
@@ -31,5 +32,6 @@ BOOT:
  {
   IMPORT_VTABLES;
   TkimgphotoVptr  =   (TkimgphotoVtab *) SvIV(FindTkVarName("TkimgphotoVtab",5));    \
+  ImgintVptr  =   (ImgintVtab *) SvIV(FindTkVarName("ImgintVtab",5));    \
   Tk_CreatePhotoImageFormat(&imgFmtJPEG);
  }
