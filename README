@@ -1,4 +1,4 @@
-This is an extension for Tk800.005 and later which supplies
+This is an extension for Tk800.015 and later which supplies
 JPEG format loader for Photo image type.
 
 This version builds with Mingw32 on Win32, and should build with 

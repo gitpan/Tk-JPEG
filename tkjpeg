@@ -24,7 +24,8 @@ unless (@ARGV)
   exit 1;
  }                        
 my $file = shift;
-my $image = $mw->Photo('-format' => 'jpeg', -file => $file, @args);
+my $image = $mw->Photo(-file => $file, @args);
+print "w=",$image->width," h=",$image->height,"\n";
 $mw->Label(-image => $image)->pack(-expand => 1, -fill => 'both');
 $mw->Button(-text => 'Quit', -command => [destroy => $mw])->pack;
 MainLoop;
