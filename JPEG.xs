@@ -18,7 +18,7 @@
 #include <tkGlue.h>
 #include <tkGlue.m>
 
-extern Tk_PhotoImageFormat	tkImgFmtJPG;
+extern Tk_PhotoImageFormat	imgFmtJPEG;
 
 DECLARE_VTABLES;
 TkimgphotoVtab *TkimgphotoVptr;
@@ -31,5 +31,5 @@ BOOT:
  {
   IMPORT_VTABLES;
   TkimgphotoVptr  =   (TkimgphotoVtab *) SvIV(FindTkVarName("TkimgphotoVtab",5));    \
-  Tk_CreatePhotoImageFormat(&tkImgFmtJPG);
+  Tk_CreatePhotoImageFormat(&imgFmtJPEG);
  }

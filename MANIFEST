@@ -6,6 +6,8 @@ MANIFEST
 MANIFEST.SKIP
 Makefile.PL
 README
+imgJPEG.c
+imgJPEG.d
 jpeg/MANIFEST
 jpeg/Makefile.PL
 jpeg/README
@@ -144,5 +146,4 @@ jpeg/wrppm.c
 jpeg/wrrle.c
 jpeg/wrtarga.c
 t/read.t
-tkImgFmtJPG.c
-tkImgFmtJPG.d
+tkjpeg

@@ -1,5 +1,7 @@
-This is an extension for Tk400.* or Tk402.* which supplies
+This is an extension for Tk800.* which supplies
 JPEG format loader for Photo image type.
+
+(Please use earlier Tk::JPEG with Tk40?.*)
 
 The sub-directory jpeg is release 5 of the The Independent JPEG Group's (IJG)
 free JPEG software with only the addition of a (dubious) Makefile.PL.  
@@ -7,12 +9,9 @@ free JPEG software with only the addition of a (dubious) Makefile.PL.
 This package is not distributed with perl/Tk due to different portability
 and licencing issues see jpeg/README for details of IJG's license.
 
-It is likely it will not work as-is with tk8.0 merge (Tk80?.*) when that 
-happens due to changes in tk internals.
+This version uses Tk wrapper code based on the Img extension to Tcl/Tk.
 
-It looks as though it would be fairly easy to add -data loading 
-and writing, although the value of saving dithered image as JPEG is 
-uncertain.
+The support for -data and passing options to read and write is incomplete.
 
 The build process does not follow a proper MakeMaker mechanism yet.
 In particular Makefile.PL in jpeg directory just invokes IJG's GNU-ish

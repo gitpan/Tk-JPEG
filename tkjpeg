@@ -1,0 +1,53 @@
+#!/usr/local/bin/perl -w
+use strict;
+use Tk;
+use Tk::JPEG;
+
+my $mw  = MainWindow->new();  
+print "vis=",$mw->visual," d=",$mw->depth,"\n";
+my ($vis) = grep(!/\b8\b/,grep(/truecolor/,$mw->visualsavailable)); 
+my @args = ();
+if ($vis)                                                       
+ {
+  print $vis,"\n";
+  $mw->destroy;
+  $mw = MainWindow->new(-visual => $vis);
+ }                                                                  
+else
+ {
+  @args = (-palette => '4/4/4');
+ }
+# print "vis=",$mw->visual," d=",$mw->depth,' "',join('" "',$mw->visualsavailable),"\"\n";  
+unless (@ARGV)
+ {
+  warn "usage $0 <imagefile>\n";
+  exit 1;
+ }                        
+my $file = shift;
+my $image = $mw->Photo('-format' => 'jpeg', -file => $file, @args);
+$mw->Label(-image => $image)->pack(-expand => 1, -fill => 'both');
+$mw->Button(-text => 'Quit', -command => [destroy => $mw])->pack;
+MainLoop;
+
+__END__
+
+=head1 NAME
+
+tkjpeg - simple JPEG viewer using perl/Tk
+
+=head1 SYNOPSIS
+
+  tkjpeg imagefile.jpg
+
+=head1 DESCRIPTION 
+
+Very simplistic image viewer that loads JPEG image, and puts it into a 
+Label for display.
+
+=head1 AUTHOR
+
+Nick Ing-Simmons <nick@ni-s.u-net.com>
+
+=cut
+
+
