@@ -1,0 +1,14 @@
+%$
+\.[oa]$
+\.bso?$
+\.old$
+\.bak$
+\bJPEG\.c$
+blib/
+\bMakefile$
+\.gdbinit
+jpeg/config\.status$
+jpeg/jconfig\.h$
+jpeg/testout\.
+jpeg/(cjpeg|djpeg|rdjpgcom|wrjpgcom)$
+\.tar\.gz$
