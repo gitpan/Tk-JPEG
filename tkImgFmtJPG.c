@@ -18,7 +18,10 @@ static char sccsid[] = "@(#) tkImgFmtJPG.c 1.9 95/08/30 15:34:52";
 #include <pTk/tkInt.h>
 #include <pTk/tkImgPhoto.h>
 #include <pTk/tkVMacro.h>
+#undef EXTERN 
+#define EXTERN(foo) extern foo
 #include "jpeg/jpeglib.h"
+#undef EXTERN
 
 /*
  * The maximum amount of memory to allocate for data read from the
@@ -72,7 +75,7 @@ struct my_error_mgr {
 
 typedef struct my_error_mgr * my_error_ptr;
 
-METHODDEF void
+static void
 my_output_message(j_common_ptr cinfo)
 {
  my_error_ptr myerr = (my_error_ptr) cinfo->err;
@@ -88,7 +91,7 @@ my_output_message(j_common_ptr cinfo)
  * Here's the routine that will replace the standard error_exit method:
  */
 
-METHODDEF void
+static void
 my_error_exit (j_common_ptr cinfo)
 {
   /* cinfo->err really points to a my_error_mgr struct, so coerce pointer */

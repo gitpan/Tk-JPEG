@@ -1,14 +1,19 @@
 /*
- * jdapi.c
+ * jdapimin.c
  *
- * Copyright (C) 1994, Thomas G. Lane.
+ * Copyright (C) 1994-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
- * This file contains application interface code for the decompression half of
- * the JPEG library.  Most of the routines intended to be called directly by
- * an application are in this file.  But also see jcomapi.c for routines
- * shared by compression and decompression.
+ * This file contains application interface code for the decompression half
+ * of the JPEG library.  These are the "minimum" API routines that may be
+ * needed in either the normal full-decompression case or the
+ * transcoding-only case.
+ *
+ * Most of the routines intended to be called directly by an application
+ * are in this file or in jdapistd.c.  But also see jcomapi.c for routines
+ * shared by compression and decompression, and jdtrans.c for the transcoding
+ * case.
  */
 
 #define JPEG_INTERNALS
@@ -21,10 +26,18 @@
  * The error manager must already be set up (in case memory manager fails).
  */
 
-GLOBAL void
-jpeg_create_decompress (j_decompress_ptr cinfo)
+GLOBAL(void)
+jpeg_CreateDecompress (j_decompress_ptr cinfo, int version, size_t structsize)
 {
   int i;
+
+  /* Guard against version mismatches between library and caller. */
+  cinfo->mem = NULL;		/* so jpeg_destroy knows mem mgr not called */
+  if (version != JPEG_LIB_VERSION)
+    ERREXIT2(cinfo, JERR_BAD_LIB_VERSION, JPEG_LIB_VERSION, version);
+  if (structsize != SIZEOF(struct jpeg_decompress_struct))
+    ERREXIT2(cinfo, JERR_BAD_STRUCT_SIZE, 
+	     (int) SIZEOF(struct jpeg_decompress_struct), (int) structsize);
 
   /* For debugging purposes, zero the whole master structure.
    * But error manager pointer is already there, so save and restore it.
@@ -51,13 +64,13 @@ jpeg_create_decompress (j_decompress_ptr cinfo)
     cinfo->ac_huff_tbl_ptrs[i] = NULL;
   }
 
-  cinfo->sample_range_limit = NULL;
-
   /* Initialize marker processor so application can override methods
    * for COM, APPn markers before calling jpeg_read_header.
    */
-  cinfo->marker = NULL;
   jinit_marker_reader(cinfo);
+
+  /* And initialize the overall input controller. */
+  jinit_input_controller(cinfo);
 
   /* OK, I'm ready */
   cinfo->global_state = DSTATE_START;
@@ -68,7 +81,7 @@ jpeg_create_decompress (j_decompress_ptr cinfo)
  * Destruction of a JPEG decompression object
  */
 
-GLOBAL void
+GLOBAL(void)
 jpeg_destroy_decompress (j_decompress_ptr cinfo)
 {
   jpeg_destroy((j_common_ptr) cinfo); /* use common routine */
@@ -76,10 +89,22 @@ jpeg_destroy_decompress (j_decompress_ptr cinfo)
 
 
 /*
+ * Abort processing of a JPEG decompression operation,
+ * but don't destroy the object itself.
+ */
+
+GLOBAL(void)
+jpeg_abort_decompress (j_decompress_ptr cinfo)
+{
+  jpeg_abort((j_common_ptr) cinfo); /* use common routine */
+}
+
+
+/*
  * Install a special processing method for COM or APPn markers.
  */
 
-GLOBAL void
+GLOBAL(void)
 jpeg_set_marker_processor (j_decompress_ptr cinfo, int marker_code,
 			   jpeg_marker_parser_method routine)
 {
@@ -96,7 +121,7 @@ jpeg_set_marker_processor (j_decompress_ptr cinfo, int marker_code,
  * Set default decompression parameters.
  */
 
-LOCAL void
+LOCAL(void)
 default_decompress_parms (j_decompress_ptr cinfo)
 {
   /* Guess the input colorspace, and set output colorspace accordingly. */
@@ -174,16 +199,25 @@ default_decompress_parms (j_decompress_ptr cinfo)
   cinfo->scale_num = 1;		/* 1:1 scaling */
   cinfo->scale_denom = 1;
   cinfo->output_gamma = 1.0;
+  cinfo->buffered_image = FALSE;
   cinfo->raw_data_out = FALSE;
-  cinfo->quantize_colors = FALSE;
-  /* We set these in case application only sets quantize_colors. */
-  cinfo->two_pass_quantize = TRUE;
-  cinfo->dither_mode = JDITHER_FS;
-  cinfo->desired_number_of_colors = 256;
-  cinfo->colormap = NULL;
-  /* DCT algorithm preference */
   cinfo->dct_method = JDCT_DEFAULT;
   cinfo->do_fancy_upsampling = TRUE;
+  cinfo->do_block_smoothing = TRUE;
+  cinfo->quantize_colors = FALSE;
+  /* We set these in case application only sets quantize_colors. */
+  cinfo->dither_mode = JDITHER_FS;
+#ifdef QUANT_2PASS_SUPPORTED
+  cinfo->two_pass_quantize = TRUE;
+#else
+  cinfo->two_pass_quantize = FALSE;
+#endif
+  cinfo->desired_number_of_colors = 256;
+  cinfo->colormap = NULL;
+  /* Initialize for no mode change in buffered-image mode. */
+  cinfo->enable_1pass_quant = FALSE;
+  cinfo->enable_external_quant = FALSE;
+  cinfo->enable_2pass_quant = FALSE;
 }
 
 
@@ -209,46 +243,37 @@ default_decompress_parms (j_decompress_ptr cinfo)
  * processing.
  * If a non-suspending data source is used and require_image is TRUE, then the
  * return code need not be inspected since only JPEG_HEADER_OK is possible.
+ *
+ * This routine is now just a front end to jpeg_consume_input, with some
+ * extra error checking.
  */
 
-GLOBAL int
+GLOBAL(int)
 jpeg_read_header (j_decompress_ptr cinfo, boolean require_image)
 {
   int retcode;
 
-  if (cinfo->global_state == DSTATE_START) {
-    /* First-time actions: reset appropriate modules */
-    (*cinfo->err->reset_error_mgr) ((j_common_ptr) cinfo);
-    (*cinfo->marker->reset_marker_reader) (cinfo);
-    (*cinfo->src->init_source) (cinfo);
-    cinfo->global_state = DSTATE_INHEADER;
-  } else if (cinfo->global_state != DSTATE_INHEADER) {
+  if (cinfo->global_state != DSTATE_START &&
+      cinfo->global_state != DSTATE_INHEADER)
     ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
-  }
 
-  retcode = (*cinfo->marker->read_markers) (cinfo);
+  retcode = jpeg_consume_input(cinfo);
 
   switch (retcode) {
-  case JPEG_HEADER_OK:		/* Found SOS, prepare to decompress */
-    /* Set up default parameters based on header data */
-    default_decompress_parms(cinfo);
-    /* Set global state: ready for start_decompress */
-    cinfo->global_state = DSTATE_READY;
+  case JPEG_REACHED_SOS:
+    retcode = JPEG_HEADER_OK;
     break;
-
-  case JPEG_HEADER_TABLES_ONLY:	/* Found EOI before any SOS */
-    if (cinfo->marker->saw_SOF)
-      ERREXIT(cinfo, JERR_SOF_NO_SOS);
-    if (require_image)		/* Complain if application wants an image */
+  case JPEG_REACHED_EOI:
+    if (require_image)		/* Complain if application wanted an image */
       ERREXIT(cinfo, JERR_NO_IMAGE);
-    /* We need not do any cleanup since only permanent storage (for DQT, DHT)
-     * has been allocated.
+    /* Reset to start state; it would be safer to require the application to
+     * call jpeg_abort, but we can't change it now for compatibility reasons.
+     * A side effect is to free any temporary memory (there shouldn't be any).
      */
-    /* Set global state: ready for a new datastream */
-    cinfo->global_state = DSTATE_START;
+    jpeg_abort((j_common_ptr) cinfo); /* sets state = DSTATE_START */
+    retcode = JPEG_HEADER_TABLES_ONLY;
     break;
-
-  case JPEG_SUSPENDED:		/* Had to suspend before end of headers */
+  case JPEG_SUSPENDED:
     /* no work */
     break;
   }
@@ -258,128 +283,87 @@ jpeg_read_header (j_decompress_ptr cinfo, boolean require_image)
 
 
 /*
- * Decompression initialization.
- * jpeg_read_header must be completed before calling this.
+ * Consume data in advance of what the decompressor requires.
+ * This can be called at any time once the decompressor object has
+ * been created and a data source has been set up.
  *
- * If a multipass operating mode was selected, this will do all but the
- * last pass, and thus may take a great deal of time.
+ * This routine is essentially a state machine that handles a couple
+ * of critical state-transition actions, namely initial setup and
+ * transition from header scanning to ready-for-start_decompress.
+ * All the actual input is done via the input controller's consume_input
+ * method.
  */
 
-GLOBAL void
-jpeg_start_decompress (j_decompress_ptr cinfo)
+GLOBAL(int)
+jpeg_consume_input (j_decompress_ptr cinfo)
 {
-  JDIMENSION chunk_ctr, last_chunk_ctr;
+  int retcode = JPEG_SUSPENDED;
 
-  if (cinfo->global_state != DSTATE_READY)
-    ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
-  /* Perform master selection of active modules */
-  jinit_master_decompress(cinfo);
-  /* Do all but the final (output) pass, and set up for that one. */
-  for (;;) {
-    (*cinfo->master->prepare_for_pass) (cinfo);
-    if (cinfo->master->is_last_pass)
-      break;
-    chunk_ctr = 0;
-    while (chunk_ctr < cinfo->main->num_chunks) {
-      /* Call progress monitor hook if present */
-      if (cinfo->progress != NULL) {
-	cinfo->progress->pass_counter = (long) chunk_ctr;
-	cinfo->progress->pass_limit = (long) cinfo->main->num_chunks;
-	(*cinfo->progress->progress_monitor) ((j_common_ptr) cinfo);
-      }
-      /* Process some data */
-      last_chunk_ctr = chunk_ctr;
-      (*cinfo->main->process_data) (cinfo, (JSAMPARRAY) NULL,
-				    &chunk_ctr, (JDIMENSION) 0);
-      if (chunk_ctr == last_chunk_ctr) /* check for failure to make progress */
-	ERREXIT(cinfo, JERR_CANT_SUSPEND);
+  /* NB: every possible DSTATE value should be listed in this switch */
+  switch (cinfo->global_state) {
+  case DSTATE_START:
+    /* Start-of-datastream actions: reset appropriate modules */
+    (*cinfo->inputctl->reset_input_controller) (cinfo);
+    /* Initialize application's data source module */
+    (*cinfo->src->init_source) (cinfo);
+    cinfo->global_state = DSTATE_INHEADER;
+    /*FALLTHROUGH*/
+  case DSTATE_INHEADER:
+    retcode = (*cinfo->inputctl->consume_input) (cinfo);
+    if (retcode == JPEG_REACHED_SOS) { /* Found SOS, prepare to decompress */
+      /* Set up default parameters based on header data */
+      default_decompress_parms(cinfo);
+      /* Set global state: ready for start_decompress */
+      cinfo->global_state = DSTATE_READY;
     }
-    (*cinfo->master->finish_pass) (cinfo);
+    break;
+  case DSTATE_READY:
+    /* Can't advance past first SOS until start_decompress is called */
+    retcode = JPEG_REACHED_SOS;
+    break;
+  case DSTATE_PRELOAD:
+  case DSTATE_PRESCAN:
+  case DSTATE_SCANNING:
+  case DSTATE_RAW_OK:
+  case DSTATE_BUFIMAGE:
+  case DSTATE_BUFPOST:
+  case DSTATE_STOPPING:
+    retcode = (*cinfo->inputctl->consume_input) (cinfo);
+    break;
+  default:
+    ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
   }
-  /* Ready for application to drive last pass through jpeg_read_scanlines
-   * or jpeg_read_raw_data.
-   */
-  cinfo->output_scanline = 0;
-  cinfo->global_state = (cinfo->raw_data_out ? DSTATE_RAW_OK : DSTATE_SCANNING);
+  return retcode;
 }
 
 
 /*
- * Read some scanlines of data from the JPEG decompressor.
- *
- * The return value will be the number of lines actually read.
- * This may be less than the number requested in several cases,
- * including bottom of image, data source suspension, and operating
- * modes that emit multiple scanlines at a time.
- *
- * Note: we warn about excess calls to jpeg_read_scanlines() since
- * this likely signals an application programmer error.  However,
- * an oversize buffer (max_lines > scanlines remaining) is not an error.
+ * Have we finished reading the input file?
  */
 
-GLOBAL JDIMENSION
-jpeg_read_scanlines (j_decompress_ptr cinfo, JSAMPARRAY scanlines,
-		     JDIMENSION max_lines)
+GLOBAL(boolean)
+jpeg_input_complete (j_decompress_ptr cinfo)
 {
-  JDIMENSION row_ctr;
-
-  if (cinfo->global_state != DSTATE_SCANNING)
+  /* Check for valid jpeg object */
+  if (cinfo->global_state < DSTATE_START ||
+      cinfo->global_state > DSTATE_STOPPING)
     ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
-  if (cinfo->output_scanline >= cinfo->output_height)
-    WARNMS(cinfo, JWRN_TOO_MUCH_DATA);
-
-  /* Call progress monitor hook if present */
-  if (cinfo->progress != NULL) {
-    cinfo->progress->pass_counter = (long) cinfo->output_scanline;
-    cinfo->progress->pass_limit = (long) cinfo->output_height;
-    (*cinfo->progress->progress_monitor) ((j_common_ptr) cinfo);
-  }
-
-  /* Process some data */
-  row_ctr = 0;
-  (*cinfo->main->process_data) (cinfo, scanlines, &row_ctr, max_lines);
-  cinfo->output_scanline += row_ctr;
-  return row_ctr;
+  return cinfo->inputctl->eoi_reached;
 }
 
 
 /*
- * Alternate entry point to read raw data.
- * Processes exactly one MCU row per call.
+ * Is there more than one scan?
  */
 
-GLOBAL JDIMENSION
-jpeg_read_raw_data (j_decompress_ptr cinfo, JSAMPIMAGE data,
-		    JDIMENSION max_lines)
+GLOBAL(boolean)
+jpeg_has_multiple_scans (j_decompress_ptr cinfo)
 {
-  JDIMENSION lines_per_MCU_row;
-
-  if (cinfo->global_state != DSTATE_RAW_OK)
+  /* Only valid after jpeg_read_header completes */
+  if (cinfo->global_state < DSTATE_READY ||
+      cinfo->global_state > DSTATE_STOPPING)
     ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
-  if (cinfo->output_scanline >= cinfo->output_height) {
-    WARNMS(cinfo, JWRN_TOO_MUCH_DATA);
-    return 0;
-  }
-
-  /* Call progress monitor hook if present */
-  if (cinfo->progress != NULL) {
-    cinfo->progress->pass_counter = (long) cinfo->output_scanline;
-    cinfo->progress->pass_limit = (long) cinfo->output_height;
-    (*cinfo->progress->progress_monitor) ((j_common_ptr) cinfo);
-  }
-
-  /* Verify that at least one MCU row can be returned. */
-  lines_per_MCU_row = cinfo->max_v_samp_factor * cinfo->min_DCT_scaled_size;
-  if (max_lines < lines_per_MCU_row)
-    ERREXIT(cinfo, JERR_BUFFER_SIZE);
-
-  /* Decompress directly into user's buffer. */
-  if (! (*cinfo->coef->decompress_data) (cinfo, data))
-    return 0;			/* suspension forced, can do nothing more */
-
-  /* OK, we processed one MCU row. */
-  cinfo->output_scanline += lines_per_MCU_row;
-  return lines_per_MCU_row;
+  return cinfo->inputctl->has_multiple_scans;
 }
 
 
@@ -392,47 +376,31 @@ jpeg_read_raw_data (j_decompress_ptr cinfo, JSAMPIMAGE data,
  * a suspending data source is used.
  */
 
-GLOBAL boolean
+GLOBAL(boolean)
 jpeg_finish_decompress (j_decompress_ptr cinfo)
 {
-  if (cinfo->global_state == DSTATE_SCANNING ||
-      cinfo->global_state == DSTATE_RAW_OK) {
-    /* Terminate final pass */
+  if ((cinfo->global_state == DSTATE_SCANNING ||
+       cinfo->global_state == DSTATE_RAW_OK) && ! cinfo->buffered_image) {
+    /* Terminate final pass of non-buffered mode */
     if (cinfo->output_scanline < cinfo->output_height)
       ERREXIT(cinfo, JERR_TOO_LITTLE_DATA);
-    (*cinfo->master->finish_pass) (cinfo);
+    (*cinfo->master->finish_output_pass) (cinfo);
+    cinfo->global_state = DSTATE_STOPPING;
+  } else if (cinfo->global_state == DSTATE_BUFIMAGE) {
+    /* Finishing after a buffered-image operation */
     cinfo->global_state = DSTATE_STOPPING;
   } else if (cinfo->global_state != DSTATE_STOPPING) {
-    /* Repeat call after a suspension? */
+    /* STOPPING = repeat call after a suspension, anything else is error */
     ERREXIT1(cinfo, JERR_BAD_STATE, cinfo->global_state);
   }
-  /* Check for EOI in source file, unless master control already read it */
-  if (! cinfo->master->eoi_processed) {
-    switch ((*cinfo->marker->read_markers) (cinfo)) {
-    case JPEG_HEADER_OK:	/* Found SOS!? */
-      ERREXIT(cinfo, JERR_EOI_EXPECTED);
-      break;
-    case JPEG_HEADER_TABLES_ONLY: /* Found EOI, A-OK */
-      break;
-    case JPEG_SUSPENDED:	/* Suspend, come back later */
-      return FALSE;
-    }
+  /* Read until EOI */
+  while (! cinfo->inputctl->eoi_reached) {
+    if ((*cinfo->inputctl->consume_input) (cinfo) == JPEG_SUSPENDED)
+      return FALSE;		/* Suspend, come back later */
   }
   /* Do final cleanup */
   (*cinfo->src->term_source) (cinfo);
   /* We can use jpeg_abort to release memory and reset global_state */
   jpeg_abort((j_common_ptr) cinfo);
   return TRUE;
-}
-
-
-/*
- * Abort processing of a JPEG decompression operation,
- * but don't destroy the object itself.
- */
-
-GLOBAL void
-jpeg_abort_decompress (j_decompress_ptr cinfo)
-{
-  jpeg_abort((j_common_ptr) cinfo); /* use common routine */
 }

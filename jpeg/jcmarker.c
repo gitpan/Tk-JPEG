@@ -1,7 +1,7 @@
 /*
  * jcmarker.c
  *
- * Copyright (C) 1991-1994, Thomas G. Lane.
+ * Copyright (C) 1991-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -93,7 +93,7 @@ typedef enum {			/* JPEG marker codes */
  * points where markers will be written.
  */
 
-LOCAL void
+LOCAL(void)
 emit_byte (j_compress_ptr cinfo, int val)
 /* Emit a byte */
 {
@@ -107,7 +107,7 @@ emit_byte (j_compress_ptr cinfo, int val)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_marker (j_compress_ptr cinfo, JPEG_MARKER mark)
 /* Emit a marker code */
 {
@@ -116,7 +116,7 @@ emit_marker (j_compress_ptr cinfo, JPEG_MARKER mark)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_2bytes (j_compress_ptr cinfo, int value)
 /* Emit a 2-byte integer; these are always MSB first in JPEG files */
 {
@@ -129,7 +129,7 @@ emit_2bytes (j_compress_ptr cinfo, int value)
  * Routines to write specific marker types.
  */
 
-LOCAL int
+LOCAL(int)
 emit_dqt (j_compress_ptr cinfo, int index)
 /* Emit a DQT marker */
 /* Returns the precision used (0 = 8bits, 1 = 16bits) for baseline checking */
@@ -155,9 +155,11 @@ emit_dqt (j_compress_ptr cinfo, int index)
     emit_byte(cinfo, index + (prec<<4));
 
     for (i = 0; i < DCTSIZE2; i++) {
+      /* The table entries must be emitted in zigzag order. */
+      unsigned int qval = qtbl->quantval[jpeg_natural_order[i]];
       if (prec)
-	emit_byte(cinfo, qtbl->quantval[i] >> 8);
-      emit_byte(cinfo, qtbl->quantval[i] & 0xFF);
+	emit_byte(cinfo, qval >> 8);
+      emit_byte(cinfo, qval & 0xFF);
     }
 
     qtbl->sent_table = TRUE;
@@ -167,7 +169,7 @@ emit_dqt (j_compress_ptr cinfo, int index)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_dht (j_compress_ptr cinfo, int index, boolean is_ac)
 /* Emit a DHT marker */
 {
@@ -205,7 +207,7 @@ emit_dht (j_compress_ptr cinfo, int index, boolean is_ac)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_dac (j_compress_ptr cinfo)
 /* Emit a DAC marker */
 /* Since the useful info is so small, we want to emit all the tables in */
@@ -248,7 +250,7 @@ emit_dac (j_compress_ptr cinfo)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_dri (j_compress_ptr cinfo)
 /* Emit a DRI marker */
 {
@@ -260,7 +262,7 @@ emit_dri (j_compress_ptr cinfo)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_sof (j_compress_ptr cinfo, JPEG_MARKER code)
 /* Emit a SOF marker */
 {
@@ -291,11 +293,11 @@ emit_sof (j_compress_ptr cinfo, JPEG_MARKER code)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_sos (j_compress_ptr cinfo)
 /* Emit a SOS marker */
 {
-  int i;
+  int i, td, ta;
   jpeg_component_info *compptr;
   
   emit_marker(cinfo, M_SOS);
@@ -307,16 +309,32 @@ emit_sos (j_compress_ptr cinfo)
   for (i = 0; i < cinfo->comps_in_scan; i++) {
     compptr = cinfo->cur_comp_info[i];
     emit_byte(cinfo, compptr->component_id);
-    emit_byte(cinfo, (compptr->dc_tbl_no << 4) + compptr->ac_tbl_no);
+    td = compptr->dc_tbl_no;
+    ta = compptr->ac_tbl_no;
+    if (cinfo->progressive_mode) {
+      /* Progressive mode: only DC or only AC tables are used in one scan;
+       * furthermore, Huffman coding of DC refinement uses no table at all.
+       * We emit 0 for unused field(s); this is recommended by the P&M text
+       * but does not seem to be specified in the standard.
+       */
+      if (cinfo->Ss == 0) {
+	ta = 0;			/* DC scan */
+	if (cinfo->Ah != 0 && !cinfo->arith_code)
+	  td = 0;		/* no DC table either */
+      } else {
+	td = 0;			/* AC scan */
+      }
+    }
+    emit_byte(cinfo, (td << 4) + ta);
   }
 
-  emit_byte(cinfo, 0);		/* Spectral selection start */
-  emit_byte(cinfo, DCTSIZE2-1);	/* Spectral selection end */
-  emit_byte(cinfo, 0);		/* Successive approximation */
+  emit_byte(cinfo, cinfo->Ss);
+  emit_byte(cinfo, cinfo->Se);
+  emit_byte(cinfo, (cinfo->Ah << 4) + cinfo->Al);
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_jfif_app0 (j_compress_ptr cinfo)
 /* Emit a JFIF-compliant APP0 marker */
 {
@@ -354,7 +372,7 @@ emit_jfif_app0 (j_compress_ptr cinfo)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_adobe_app14 (j_compress_ptr cinfo)
 /* Emit an Adobe APP14 marker */
 {
@@ -408,7 +426,7 @@ emit_adobe_app14 (j_compress_ptr cinfo)
  * Other uses are not guaranteed to produce desirable results.
  */
 
-METHODDEF void
+METHODDEF(void)
 write_any_marker (j_compress_ptr cinfo, int marker,
 		  const JOCTET *dataptr, unsigned int datalen)
 /* Emit an arbitrary marker with parameters */
@@ -434,10 +452,10 @@ write_any_marker (j_compress_ptr cinfo, int marker,
  * be used for any other JPEG colorspace.  The Adobe marker is helpful
  * to distinguish RGB, CMYK, and YCCK colorspaces.
  * Note that an application can write additional header markers after
- * jpeg_start_decompress returns.
+ * jpeg_start_compress returns.
  */
 
-METHODDEF void
+METHODDEF(void)
 write_file_header (j_compress_ptr cinfo)
 {
   emit_marker(cinfo, M_SOI);	/* first the SOI */
@@ -457,7 +475,7 @@ write_file_header (j_compress_ptr cinfo)
  * try to error-check the quant table numbers as soon as they see the SOF.
  */
 
-METHODDEF void
+METHODDEF(void)
 write_frame_header (j_compress_ptr cinfo)
 {
   int ci, prec;
@@ -477,27 +495,34 @@ write_frame_header (j_compress_ptr cinfo)
   /* Check for a non-baseline specification.
    * Note we assume that Huffman table numbers won't be changed later.
    */
-  is_baseline = TRUE;
-  if (cinfo->arith_code || (cinfo->data_precision != 8))
+  if (cinfo->arith_code || cinfo->progressive_mode ||
+      cinfo->data_precision != 8) {
     is_baseline = FALSE;
-  for (ci = 0, compptr = cinfo->comp_info; ci < cinfo->num_components;
-       ci++, compptr++) {
-    if (compptr->dc_tbl_no > 1 || compptr->ac_tbl_no > 1)
+  } else {
+    is_baseline = TRUE;
+    for (ci = 0, compptr = cinfo->comp_info; ci < cinfo->num_components;
+	 ci++, compptr++) {
+      if (compptr->dc_tbl_no > 1 || compptr->ac_tbl_no > 1)
+	is_baseline = FALSE;
+    }
+    if (prec && is_baseline) {
       is_baseline = FALSE;
-  }
-  if (prec && is_baseline) {
-    is_baseline = FALSE;
-    /* If it's baseline except for quantizer size, warn the user */
-    TRACEMS(cinfo, 0, JTRC_16BIT_TABLES);
+      /* If it's baseline except for quantizer size, warn the user */
+      TRACEMS(cinfo, 0, JTRC_16BIT_TABLES);
+    }
   }
 
   /* Emit the proper SOF marker */
-  if (cinfo->arith_code)
+  if (cinfo->arith_code) {
     emit_sof(cinfo, M_SOF9);	/* SOF code for arithmetic coding */
-  else if (is_baseline)
-    emit_sof(cinfo, M_SOF0);	/* SOF code for baseline implementation */
-  else
-    emit_sof(cinfo, M_SOF1);	/* SOF code for non-baseline Huffman file */
+  } else {
+    if (cinfo->progressive_mode)
+      emit_sof(cinfo, M_SOF2);	/* SOF code for progressive Huffman */
+    else if (is_baseline)
+      emit_sof(cinfo, M_SOF0);	/* SOF code for baseline implementation */
+    else
+      emit_sof(cinfo, M_SOF1);	/* SOF code for non-baseline Huffman file */
+  }
 }
 
 
@@ -507,7 +532,7 @@ write_frame_header (j_compress_ptr cinfo)
  * Compressed data will be written following the SOS.
  */
 
-METHODDEF void
+METHODDEF(void)
 write_scan_header (j_compress_ptr cinfo)
 {
   int i;
@@ -525,8 +550,19 @@ write_scan_header (j_compress_ptr cinfo)
      */
     for (i = 0; i < cinfo->comps_in_scan; i++) {
       compptr = cinfo->cur_comp_info[i];
-      emit_dht(cinfo, compptr->dc_tbl_no, FALSE);
-      emit_dht(cinfo, compptr->ac_tbl_no, TRUE);
+      if (cinfo->progressive_mode) {
+	/* Progressive mode: only DC or only AC tables are used in one scan */
+	if (cinfo->Ss == 0) {
+	  if (cinfo->Ah == 0)	/* DC needs no table for refinement scan */
+	    emit_dht(cinfo, compptr->dc_tbl_no, FALSE);
+	} else {
+	  emit_dht(cinfo, compptr->ac_tbl_no, TRUE);
+	}
+      } else {
+	/* Sequential mode: need both DC and AC tables */
+	emit_dht(cinfo, compptr->dc_tbl_no, FALSE);
+	emit_dht(cinfo, compptr->ac_tbl_no, TRUE);
+      }
     }
   }
 
@@ -545,7 +581,7 @@ write_scan_header (j_compress_ptr cinfo)
  * Write datastream trailer.
  */
 
-METHODDEF void
+METHODDEF(void)
 write_file_trailer (j_compress_ptr cinfo)
 {
   emit_marker(cinfo, M_EOI);
@@ -559,7 +595,7 @@ write_file_trailer (j_compress_ptr cinfo)
  * emitted.  Note that all tables will be marked sent_table = TRUE at exit.
  */
 
-METHODDEF void
+METHODDEF(void)
 write_tables_only (j_compress_ptr cinfo)
 {
   int i;
@@ -588,7 +624,7 @@ write_tables_only (j_compress_ptr cinfo)
  * Initialize the marker writer module.
  */
 
-GLOBAL void
+GLOBAL(void)
 jinit_marker_writer (j_compress_ptr cinfo)
 {
   /* Create the subobject */

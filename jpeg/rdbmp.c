@@ -1,7 +1,7 @@
 /*
  * rdbmp.c
  *
- * Copyright (C) 1994, Thomas G. Lane.
+ * Copyright (C) 1994-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -64,7 +64,7 @@ typedef struct _bmp_source_struct {
 } bmp_source_struct;
 
 
-LOCAL int
+LOCAL(int)
 read_byte (bmp_source_ptr sinfo)
 /* Read next byte from BMP file */
 {
@@ -77,7 +77,7 @@ read_byte (bmp_source_ptr sinfo)
 }
 
 
-LOCAL void
+LOCAL(void)
 read_colormap (bmp_source_ptr sinfo, int cmaplen, int mapentrysize)
 /* Read the colormap from a BMP file */
 {
@@ -115,7 +115,7 @@ read_colormap (bmp_source_ptr sinfo, int cmaplen, int mapentrysize)
  * it is an 8-bit image, we must expand colormapped pixels to 24bit format.
  */
 
-METHODDEF JDIMENSION
+METHODDEF(JDIMENSION)
 get_8bit_row (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 /* This version is for reading 8-bit colormap indexes */
 {
@@ -129,7 +129,8 @@ get_8bit_row (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
   /* Fetch next row from virtual array */
   source->source_row--;
   image_ptr = (*cinfo->mem->access_virt_sarray)
-    ((j_common_ptr) cinfo, source->whole_image, source->source_row, FALSE);
+    ((j_common_ptr) cinfo, source->whole_image,
+     source->source_row, (JDIMENSION) 1, FALSE);
 
   /* Expand the colormap indexes to real data */
   inptr = image_ptr[0];
@@ -145,7 +146,7 @@ get_8bit_row (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 }
 
 
-METHODDEF JDIMENSION
+METHODDEF(JDIMENSION)
 get_24bit_row (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 /* This version is for reading 24-bit pixels */
 {
@@ -157,7 +158,8 @@ get_24bit_row (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
   /* Fetch next row from virtual array */
   source->source_row--;
   image_ptr = (*cinfo->mem->access_virt_sarray)
-    ((j_common_ptr) cinfo, source->whole_image, source->source_row, FALSE);
+    ((j_common_ptr) cinfo, source->whole_image,
+     source->source_row, (JDIMENSION) 1, FALSE);
 
   /* Transfer data.  Note source values are in BGR order
    * (even though Microsoft's own documents say the opposite).
@@ -181,7 +183,7 @@ get_24bit_row (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
  * get_8bit_row or get_24bit_row on subsequent calls.
  */
 
-METHODDEF JDIMENSION
+METHODDEF(JDIMENSION)
 preload_image (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 {
   bmp_source_ptr source = (bmp_source_ptr) sinfo;
@@ -200,7 +202,8 @@ preload_image (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
       (*progress->pub.progress_monitor) ((j_common_ptr) cinfo);
     }
     image_ptr = (*cinfo->mem->access_virt_sarray)
-      ((j_common_ptr) cinfo, source->whole_image, row, TRUE);
+      ((j_common_ptr) cinfo, source->whole_image,
+       row, (JDIMENSION) 1, TRUE);
     out_ptr = image_ptr[0];
     for (col = source->row_width; col > 0; col--) {
       /* inline copy of read_byte() for speed */
@@ -234,7 +237,7 @@ preload_image (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
  * Read the file header; return image size and component count.
  */
 
-METHODDEF void
+METHODDEF(void)
 start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 {
   bmp_source_ptr source = (bmp_source_ptr) sinfo;
@@ -246,6 +249,7 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 			       (((INT32) UCH(array[offset+1])) << 8) + \
 			       (((INT32) UCH(array[offset+2])) << 16) + \
 			       (((INT32) UCH(array[offset+3])) << 24))
+  INT32 bfOffBits;
   INT32 headerSize;
   INT32 biWidth = 0;		/* initialize to avoid compiler warning */
   INT32 biHeight = 0;
@@ -254,6 +258,7 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
   INT32 biXPelsPerMeter,biYPelsPerMeter;
   INT32 biClrUsed = 0;
   int mapentrysize = 0;		/* 0 indicates no colormap */
+  INT32 bPad;
   JDIMENSION row_width;
 
   /* Read and verify the bitmap file header */
@@ -261,6 +266,7 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
     ERREXIT(cinfo, JERR_INPUT_EOF);
   if (GET_2B(bmpfileheader,0) != 0x4D42) /* 'BM' */
     ERREXIT(cinfo, JERR_BMP_NOT);
+  bfOffBits = (INT32) GET_4B(bmpfileheader,10);
   /* We ignore the remaining fileheader fields */
 
   /* The infoheader might be 12 bytes (OS/2 1.x), 40 bytes (Windows),
@@ -340,6 +346,9 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
     break;
   }
 
+  /* Compute distance to bitmap data --- will adjust for colormap below */
+  bPad = bfOffBits - (headerSize + 14);
+
   /* Read the colormap, if any */
   if (mapentrysize > 0) {
     if (biClrUsed <= 0)
@@ -352,6 +361,15 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
        (JDIMENSION) biClrUsed, (JDIMENSION) 3);
     /* and read it from the file */
     read_colormap(source, (int) biClrUsed, mapentrysize);
+    /* account for size of colormap */
+    bPad -= biClrUsed * mapentrysize;
+  }
+
+  /* Skip any remaining pad bytes */
+  if (bPad < 0)			/* incorrect bfOffBits value? */
+    ERREXIT(cinfo, JERR_BMP_BADHEADER);
+  while (--bPad >= 0) {
+    (void) read_byte(source);
   }
 
   /* Compute row width in file, including padding to 4-byte boundary */
@@ -364,7 +382,7 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 
   /* Allocate space for inversion array, prepare for preload pass */
   source->whole_image = (*cinfo->mem->request_virt_sarray)
-    ((j_common_ptr) cinfo, JPOOL_IMAGE,
+    ((j_common_ptr) cinfo, JPOOL_IMAGE, FALSE,
      row_width, (JDIMENSION) biHeight, (JDIMENSION) 1);
   source->pub.get_pixel_rows = preload_image;
   if (cinfo->progress != NULL) {
@@ -390,7 +408,7 @@ start_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
  * Finish up at the end of the file.
  */
 
-METHODDEF void
+METHODDEF(void)
 finish_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
 {
   /* no work */
@@ -401,7 +419,7 @@ finish_input_bmp (j_compress_ptr cinfo, cjpeg_source_ptr sinfo)
  * The module selection routine for BMP format input.
  */
 
-GLOBAL cjpeg_source_ptr
+GLOBAL(cjpeg_source_ptr)
 jinit_read_bmp (j_compress_ptr cinfo)
 {
   bmp_source_ptr source;

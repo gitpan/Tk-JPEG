@@ -1,7 +1,7 @@
 /*
  * jmorecfg.h
  *
- * Copyright (C) 1991-1994, Thomas G. Lane.
+ * Copyright (C) 1991-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -173,16 +173,51 @@ typedef unsigned int JDIMENSION;
 #define JPEG_MAX_DIMENSION  65500L  /* a tad under 64K to prevent overflows */
 
 
-/* These defines are used in all function definitions and extern declarations.
- * You could modify them if you need to change function linkage conventions.
+/* These macros are used in all function definitions and extern declarations.
+ * You could modify them if you need to change function linkage conventions;
+ * in particular, you'll need to do that to make the library a Windows DLL.
  * Another application is to make all functions global for use with debuggers
  * or code profilers that require it.
  */
 
-#define METHODDEF static	/* a function called through method pointers */
-#define LOCAL	  static	/* a function used only in its module */
-#define GLOBAL			/* a function referenced thru EXTERNs */
-#define EXTERN	  extern	/* a reference to a GLOBAL function */
+/* a function called through method pointers: */
+#define METHODDEF(type)		static type
+/* a function used only in its module: */
+#define LOCAL(type)		static type
+/* a function referenced thru EXTERNs: */
+#define GLOBAL(type)		type
+/* a reference to a GLOBAL function: */
+
+/* Compile with -DJPEG_DLL for Windows DLL support */
+#if defined(__WIN32__) && defined(JPEG_DLL)
+#  define WIN32_LEAN_AND_MEAN
+#  include <windows.h>
+#  undef WIN32_LEAN_AND_MEAN
+#  if defined(_MSC_VER)
+#    define EXTERN(type) extern __declspec(dllexport) type
+#  else
+#    if defined(__BORLANDC__)
+#	define EXTERN(type) extern type _export
+#    endif
+#  endif
+#endif
+
+#if !defined(EXTERN)
+#define EXTERN(type)		extern type
+#endif
+
+
+/* This macro is used to declare a "method", that is, a function pointer.
+ * We want to supply prototype parameters if the compiler can cope.
+ * Note that the arglist parameter must be parenthesized!
+ * Again, you can customize this if you need special linkage keywords.
+ */
+
+#ifdef HAVE_PROTOTYPES
+#define JMETHOD(type,methodname,arglist)  type (*methodname) arglist
+#else
+#define JMETHOD(type,methodname,arglist)  type (*methodname) ()
+#endif
 
 
 /* Here is the pseudo-keyword for declaring pointers that must be "far"
@@ -191,10 +226,12 @@ typedef unsigned int JDIMENSION;
  * explicit coding is needed; see uses of the NEED_FAR_POINTERS symbol.
  */
 
+#ifndef FAR
 #ifdef NEED_FAR_POINTERS
 #define FAR  far
 #else
 #define FAR
+#endif
 #endif
 
 
@@ -249,13 +286,16 @@ typedef int boolean;
 /* Encoder capability options: */
 
 #undef  C_ARITH_CODING_SUPPORTED    /* Arithmetic coding back end? */
-#undef  C_MULTISCAN_FILES_SUPPORTED /* Multiple-scan JPEG files?  (NYI) */
+#define C_MULTISCAN_FILES_SUPPORTED /* Multiple-scan JPEG files? */
+#define C_PROGRESSIVE_SUPPORTED	    /* Progressive JPEG? (Requires MULTISCAN)*/
 #define ENTROPY_OPT_SUPPORTED	    /* Optimization of entropy coding parms? */
 /* Note: if you selected 12-bit data precision, it is dangerous to turn off
  * ENTROPY_OPT_SUPPORTED.  The standard Huffman tables are only good for 8-bit
  * precision, so jchuff.c normally uses entropy optimization to compute
  * usable tables for higher precision.  If you don't want to do optimization,
  * you'll have to supply different default Huffman tables.
+ * The exact same statements apply for progressive JPEG: the default tables
+ * don't work for progressive mode.  (This may get fixed, however.)
  */
 #define INPUT_SMOOTHING_SUPPORTED   /* Input image smoothing option? */
 
@@ -263,6 +303,8 @@ typedef int boolean;
 
 #undef  D_ARITH_CODING_SUPPORTED    /* Arithmetic coding back end? */
 #define D_MULTISCAN_FILES_SUPPORTED /* Multiple-scan JPEG files? */
+#define D_PROGRESSIVE_SUPPORTED	    /* Progressive JPEG? (Requires MULTISCAN)*/
+#define BLOCK_SMOOTHING_SUPPORTED   /* Block smoothing? (Progressive only) */
 #define IDCT_SCALING_SUPPORTED	    /* Output rescaling via IDCT? */
 #undef  UPSAMPLE_SCALING_SUPPORTED  /* Output rescaling at upsample stage? */
 #define UPSAMPLE_MERGING_SUPPORTED  /* Fast path for sloppy upsampling? */

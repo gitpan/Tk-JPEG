@@ -7,8 +7,8 @@
 blib/
 \b(Makefile|pm_to_blib)$
 \.gdbinit
-jpeg/config\.status$
+jpeg/config\.(status|log)$
 jpeg/jconfig\.h$
-jpeg/testout\.
-jpeg/(cjpeg|djpeg|rdjpgcom|wrjpgcom)$
+jpeg/testout
+jpeg/(cjpeg|djpeg|rdjpgcom|wrjpgcom|jpegtran)$
 \.tar\.gz$

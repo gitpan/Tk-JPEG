@@ -1,7 +1,7 @@
 /*
  * jdmerge.c
  *
- * Copyright (C) 1994, Thomas G. Lane.
+ * Copyright (C) 1994-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -75,24 +75,18 @@ typedef my_upsampler * my_upsample_ptr;
 
 
 /*
- * Initialize for an upsampling pass.
+ * Initialize tables for YCC->RGB colorspace conversion.
+ * This is taken directly from jdcolor.c; see that file for more info.
  */
 
-METHODDEF void
-start_pass_merged_upsample (j_decompress_ptr cinfo)
+LOCAL(void)
+build_ycc_rgb_table (j_decompress_ptr cinfo)
 {
   my_upsample_ptr upsample = (my_upsample_ptr) cinfo->upsample;
-  INT32 i, x2;
+  int i;
+  INT32 x;
   SHIFT_TEMPS
 
-  /* Mark the spare buffer empty */
-  upsample->spare_full = FALSE;
-  /* Initialize total-height counter for detecting bottom of image */
-  upsample->rows_to_go = cinfo->output_height;
-
-  /* Initialize the YCC=>RGB conversion tables.
-   * This is taken directly from jdcolor.c; see that file for more info.
-   */
   upsample->Cr_r_tab = (int *)
     (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
 				(MAXJSAMPLE+1) * SIZEOF(int));
@@ -106,22 +100,37 @@ start_pass_merged_upsample (j_decompress_ptr cinfo)
     (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
 				(MAXJSAMPLE+1) * SIZEOF(INT32));
 
-  for (i = 0; i <= MAXJSAMPLE; i++) {
+  for (i = 0, x = -CENTERJSAMPLE; i <= MAXJSAMPLE; i++, x++) {
     /* i is the actual input pixel value, in the range 0..MAXJSAMPLE */
-    /* The Cb or Cr value we are thinking of is x = i - MAXJSAMPLE/2 */
-    x2 = 2*i - MAXJSAMPLE;	/* twice x */
+    /* The Cb or Cr value we are thinking of is x = i - CENTERJSAMPLE */
     /* Cr=>R value is nearest int to 1.40200 * x */
     upsample->Cr_r_tab[i] = (int)
-		    RIGHT_SHIFT(FIX(1.40200/2) * x2 + ONE_HALF, SCALEBITS);
+		    RIGHT_SHIFT(FIX(1.40200) * x + ONE_HALF, SCALEBITS);
     /* Cb=>B value is nearest int to 1.77200 * x */
     upsample->Cb_b_tab[i] = (int)
-		    RIGHT_SHIFT(FIX(1.77200/2) * x2 + ONE_HALF, SCALEBITS);
+		    RIGHT_SHIFT(FIX(1.77200) * x + ONE_HALF, SCALEBITS);
     /* Cr=>G value is scaled-up -0.71414 * x */
-    upsample->Cr_g_tab[i] = (- FIX(0.71414/2)) * x2;
+    upsample->Cr_g_tab[i] = (- FIX(0.71414)) * x;
     /* Cb=>G value is scaled-up -0.34414 * x */
     /* We also add in ONE_HALF so that need not do it in inner loop */
-    upsample->Cb_g_tab[i] = (- FIX(0.34414/2)) * x2 + ONE_HALF;
+    upsample->Cb_g_tab[i] = (- FIX(0.34414)) * x + ONE_HALF;
   }
+}
+
+
+/*
+ * Initialize for an upsampling pass.
+ */
+
+METHODDEF(void)
+start_pass_merged_upsample (j_decompress_ptr cinfo)
+{
+  my_upsample_ptr upsample = (my_upsample_ptr) cinfo->upsample;
+
+  /* Mark the spare buffer empty */
+  upsample->spare_full = FALSE;
+  /* Initialize total-height counter for detecting bottom of image */
+  upsample->rows_to_go = cinfo->output_height;
 }
 
 
@@ -131,7 +140,7 @@ start_pass_merged_upsample (j_decompress_ptr cinfo)
  * The control routine just handles the row buffering considerations.
  */
 
-METHODDEF void
+METHODDEF(void)
 merged_2v_upsample (j_decompress_ptr cinfo,
 		    JSAMPIMAGE input_buf, JDIMENSION *in_row_group_ctr,
 		    JDIMENSION in_row_groups_avail,
@@ -180,7 +189,7 @@ merged_2v_upsample (j_decompress_ptr cinfo,
 }
 
 
-METHODDEF void
+METHODDEF(void)
 merged_1v_upsample (j_decompress_ptr cinfo,
 		    JSAMPIMAGE input_buf, JDIMENSION *in_row_group_ctr,
 		    JDIMENSION in_row_groups_avail,
@@ -213,7 +222,7 @@ merged_1v_upsample (j_decompress_ptr cinfo,
  * Upsample and color convert for the case of 2:1 horizontal and 1:1 vertical.
  */
 
-METHODDEF void
+METHODDEF(void)
 h2v1_merged_upsample (j_decompress_ptr cinfo,
 		      JSAMPIMAGE input_buf, JDIMENSION in_row_group_ctr,
 		      JSAMPARRAY output_buf)
@@ -275,7 +284,7 @@ h2v1_merged_upsample (j_decompress_ptr cinfo,
  * Upsample and color convert for the case of 2:1 horizontal and 2:1 vertical.
  */
 
-METHODDEF void
+METHODDEF(void)
 h2v2_merged_upsample (j_decompress_ptr cinfo,
 		      JSAMPIMAGE input_buf, JDIMENSION in_row_group_ctr,
 		      JSAMPARRAY output_buf)
@@ -357,7 +366,7 @@ h2v2_merged_upsample (j_decompress_ptr cinfo,
  * of this module; no safety checks are made here.
  */
 
-GLOBAL void
+GLOBAL(void)
 jinit_merged_upsampler (j_decompress_ptr cinfo)
 {
   my_upsample_ptr upsample;
@@ -384,6 +393,8 @@ jinit_merged_upsampler (j_decompress_ptr cinfo)
     /* No spare row needed */
     upsample->spare_row = NULL;
   }
+
+  build_ycc_rgb_table(cinfo);
 }
 
 #endif /* UPSAMPLE_MERGING_SUPPORTED */

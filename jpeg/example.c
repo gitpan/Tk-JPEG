@@ -68,7 +68,7 @@ extern int image_width;		/* Number of columns in image */
  * and a compression quality factor are passed in.
  */
 
-GLOBAL void
+GLOBAL(void)
 write_JPEG_file (char * filename, int quality)
 {
   /* This struct contains the JPEG compression parameters and pointers to
@@ -83,6 +83,8 @@ write_JPEG_file (char * filename, int quality)
    * (see the second half of this file for an example).  But here we just
    * take the easy way out and use the standard error handler, which will
    * print a message on stderr and call exit() if compression fails.
+   * Note that this struct must live as long as the main JPEG parameter
+   * struct, to avoid dangling-pointer problems.
    */
   struct jpeg_error_mgr jerr;
   /* More stuff */
@@ -152,6 +154,10 @@ write_JPEG_file (char * filename, int quality)
   row_stride = image_width * 3;	/* JSAMPLEs per row in image_buffer */
 
   while (cinfo.next_scanline < cinfo.image_height) {
+    /* jpeg_write_scanlines expects an array of pointers to scanlines.
+     * Here the array is only one element long, but you could pass
+     * more than one scanline at a time if that's more convenient.
+     */
     row_pointer[0] = & image_buffer[cinfo.next_scanline * row_stride];
     (void) jpeg_write_scanlines(&cinfo, row_pointer, 1);
   }
@@ -186,7 +192,7 @@ write_JPEG_file (char * filename, int quality)
  * (If you don't know what that's for, you don't need it.)
  *
  * If the compressor requires full-image buffers (for entropy-coding
- * optimization or a noninterleaved JPEG file), it will create temporary
+ * optimization or a multi-scan JPEG file), it will create temporary
  * files for anything that doesn't fit within the maximum-memory setting.
  * (Note that temp files are NOT needed if you use the default parameters.)
  * On some systems you may need to set up a signal handler to ensure that
@@ -253,7 +259,7 @@ typedef struct my_error_mgr * my_error_ptr;
  * Here's the routine that will replace the standard error_exit method:
  */
 
-METHODDEF void
+METHODDEF(void)
 my_error_exit (j_common_ptr cinfo)
 {
   /* cinfo->err really points to a my_error_mgr struct, so coerce pointer */
@@ -274,14 +280,17 @@ my_error_exit (j_common_ptr cinfo)
  */
 
 
-GLOBAL int
+GLOBAL(int)
 read_JPEG_file (char * filename)
 {
   /* This struct contains the JPEG decompression parameters and pointers to
    * working space (which is allocated as needed by the JPEG library).
    */
   struct jpeg_decompress_struct cinfo;
-  /* We use our private extension JPEG error handler. */
+  /* We use our private extension JPEG error handler.
+   * Note that this struct must live as long as the main JPEG parameter
+   * struct, to avoid dangling-pointer problems.
+   */
   struct my_error_mgr jerr;
   /* More stuff */
   FILE * infile;		/* source file */
@@ -337,7 +346,10 @@ read_JPEG_file (char * filename)
 
   /* Step 5: Start decompressor */
 
-  jpeg_start_decompress(&cinfo);
+  (void) jpeg_start_decompress(&cinfo);
+  /* We can ignore the return value since suspension is not possible
+   * with the stdio data source.
+   */
 
   /* We may need to do some setup of our own at this point before reading
    * the data.  After jpeg_start_decompress() we have the correct scaled
@@ -358,6 +370,10 @@ read_JPEG_file (char * filename)
    * loop counter, so that we don't have to keep track ourselves.
    */
   while (cinfo.output_scanline < cinfo.output_height) {
+    /* jpeg_read_scanlines expects an array of pointers to scanlines.
+     * Here the array is only one element long, but you could ask for
+     * more than one scanline at a time if that's more convenient.
+     */
     (void) jpeg_read_scanlines(&cinfo, buffer, 1);
     /* Assume put_scanline_someplace wants a pointer and sample count. */
     put_scanline_someplace(buffer[0], row_stride);

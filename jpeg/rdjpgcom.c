@@ -1,7 +1,7 @@
 /*
  * rdjpgcom.c
  *
- * Copyright (C) 1994, Thomas G. Lane.
+ * Copyright (C) 1994-1995, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -23,7 +23,8 @@
 
 #ifdef USE_CCOMMAND		/* command-line reader for Macintosh */
 #ifdef __MWERKS__
-#include <SIOUX.h>              /* Metrowerks declares it here */
+#include <SIOUX.h>              /* Metrowerks needs this */
+#include <console.h>		/* ... and this */
 #endif
 #ifdef THINK_C
 #include <console.h>		/* Think declares it here */
@@ -100,9 +101,9 @@ read_2_bytes (void)
 
 #define M_SOF0  0xC0		/* Start Of Frame N */
 #define M_SOF1  0xC1		/* N indicates which compression process */
-#define M_SOF2  0xC2		/* Only SOF0 and SOF1 are now in common use */
+#define M_SOF2  0xC2		/* Only SOF0-SOF2 are now in common use */
 #define M_SOF3  0xC3
-#define M_SOF5  0xC5
+#define M_SOF5  0xC5		/* NB: codes C4 and CC are NOT SOF markers */
 #define M_SOF6  0xC6
 #define M_SOF7  0xC7
 #define M_SOF9  0xC9
@@ -262,7 +263,7 @@ process_SOFn (int marker)
   unsigned int image_height, image_width;
   int data_precision, num_components;
   const char * process;
-  int ci, c1, c2, c3;
+  int ci;
 
   length = read_2_bytes();	/* usual parameter length count */
 
@@ -296,9 +297,9 @@ process_SOFn (int marker)
     ERREXIT("Bogus SOF marker length");
 
   for (ci = 0; ci < num_components; ci++) {
-    c1 = read_1_byte();		/* Component ID code */
-    c2 = read_1_byte();		/* H, V sampling factors */
-    c3 = read_1_byte();		/* Quant table number */
+    (void) read_1_byte();	/* Component ID code */
+    (void) read_1_byte();	/* H, V sampling factors */
+    (void) read_1_byte();	/* Quantization table number */
   }
 }
 

@@ -1,9 +1,14 @@
 /*
  * wrgif.c
  *
- * Copyright (C) 1991-1994, Thomas G. Lane.
+ * Copyright (C) 1991-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
+ *
+ **************************************************************************
+ * WARNING: You will need an LZW patent license from Unisys in order to   *
+ * use this file legally in any commercial or shareware application.      *
+ **************************************************************************
  *
  * This file contains routines to write output images in GIF format.
  *
@@ -111,7 +116,7 @@ typedef gif_dest_struct * gif_dest_ptr;
  * A data block consists of a count byte (1..255) and that many data bytes.
  */
 
-LOCAL void
+LOCAL(void)
 flush_packet (gif_dest_ptr dinfo)
 /* flush any accumulated data */
 {
@@ -135,7 +140,7 @@ flush_packet (gif_dest_ptr dinfo)
 
 /* Routine to convert variable-width codes into a byte stream */
 
-LOCAL void
+LOCAL(void)
 output (gif_dest_ptr dinfo, code_int code)
 /* Emit a code of n_bits bits */
 /* Uses cur_accum and cur_bits to reblock into 8-bit bytes */
@@ -167,7 +172,7 @@ output (gif_dest_ptr dinfo, code_int code)
 /* The LZW algorithm proper */
 
 
-LOCAL void
+LOCAL(void)
 clear_hash (gif_dest_ptr dinfo)
 /* Fill the hash table with empty entries */
 {
@@ -176,7 +181,7 @@ clear_hash (gif_dest_ptr dinfo)
 }
 
 
-LOCAL void
+LOCAL(void)
 clear_block (gif_dest_ptr dinfo)
 /* Reset compressor and issue a Clear code */
 {
@@ -188,7 +193,7 @@ clear_block (gif_dest_ptr dinfo)
 }
 
 
-LOCAL void
+LOCAL(void)
 compress_init (gif_dest_ptr dinfo, int i_bits)
 /* Initialize LZW compressor */
 {
@@ -210,7 +215,7 @@ compress_init (gif_dest_ptr dinfo, int i_bits)
 }
 
 
-LOCAL void
+LOCAL(void)
 compress_byte (gif_dest_ptr dinfo, int c)
 /* Accept and compress one 8-bit byte */
 {
@@ -268,7 +273,7 @@ compress_byte (gif_dest_ptr dinfo, int c)
 }
 
 
-LOCAL void
+LOCAL(void)
 compress_term (gif_dest_ptr dinfo)
 /* Clean up at end */
 {
@@ -289,7 +294,7 @@ compress_term (gif_dest_ptr dinfo)
 /* GIF header construction */
 
 
-LOCAL void
+LOCAL(void)
 put_word (gif_dest_ptr dinfo, unsigned int w)
 /* Emit a 16-bit word, LSB first */
 {
@@ -298,7 +303,7 @@ put_word (gif_dest_ptr dinfo, unsigned int w)
 }
 
 
-LOCAL void
+LOCAL(void)
 put_3bytes (gif_dest_ptr dinfo, int val)
 /* Emit 3 copies of same byte value --- handy subr for colormap construction */
 {
@@ -308,7 +313,7 @@ put_3bytes (gif_dest_ptr dinfo, int val)
 }
 
 
-LOCAL void
+LOCAL(void)
 emit_header (gif_dest_ptr dinfo, int num_colors, JSAMPARRAY colormap)
 /* Output the GIF file header, including color map */
 /* If colormap==NULL, synthesize a gray-scale colormap */
@@ -391,7 +396,7 @@ emit_header (gif_dest_ptr dinfo, int num_colors, JSAMPARRAY colormap)
  * Startup: write the file header.
  */
 
-METHODDEF void
+METHODDEF(void)
 start_output_gif (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 {
   gif_dest_ptr dest = (gif_dest_ptr) dinfo;
@@ -408,7 +413,7 @@ start_output_gif (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
  * In this module rows_supplied will always be 1.
  */
 
-METHODDEF void
+METHODDEF(void)
 put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 		JDIMENSION rows_supplied)
 {
@@ -427,7 +432,7 @@ put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
  * Finish up at the end of the file.
  */
 
-METHODDEF void
+METHODDEF(void)
 finish_output_gif (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 {
   gif_dest_ptr dest = (gif_dest_ptr) dinfo;
@@ -449,7 +454,7 @@ finish_output_gif (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
  * The module selection routine for GIF format output.
  */
 
-GLOBAL djpeg_dest_ptr
+GLOBAL(djpeg_dest_ptr)
 jinit_write_gif (j_decompress_ptr cinfo)
 {
   gif_dest_ptr dest;

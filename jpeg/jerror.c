@@ -1,7 +1,7 @@
 /*
  * jerror.c
  *
- * Copyright (C) 1991-1994, Thomas G. Lane.
+ * Copyright (C) 1991-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -17,14 +17,31 @@
 #include "jinclude.h"
 #include "jpeglib.h"
 #include "jversion.h"
-
-#include "jerror.h"		/* get error codes */
-#define JMAKE_MSG_TABLE
-#include "jerror.h"		/* create message string table */
+#include "jerror.h"
 
 #ifndef EXIT_FAILURE		/* define exit() codes if not provided */
 #define EXIT_FAILURE  1
 #endif
+
+
+/*
+ * Create the message string table.
+ * We do this from the master message list in jerror.h by re-reading
+ * jerror.h with a suitable definition for macro JMESSAGE.
+ * The message table is made an external symbol just in case any applications
+ * want to refer to it directly.
+ */
+
+#ifdef NEED_SHORT_EXTERNAL_NAMES
+#define jpeg_std_message_table	jMsgTable
+#endif
+
+#define JMESSAGE(code,string)	string ,
+
+const char * const jpeg_std_message_table[] = {
+#include "jerror.h"
+  NULL
+};
 
 
 /*
@@ -40,7 +57,7 @@
  * or jpeg_destroy) at some point.
  */
 
-METHODDEF void
+METHODDEF(void)
 error_exit (j_common_ptr cinfo)
 {
   /* Always display the message */
@@ -59,7 +76,7 @@ error_exit (j_common_ptr cinfo)
  * other than stderr.
  */
 
-METHODDEF void
+METHODDEF(void)
 output_message (j_common_ptr cinfo)
 {
   char buffer[JMSG_LENGTH_MAX];
@@ -83,7 +100,7 @@ output_message (j_common_ptr cinfo)
  * or change the policy about which messages to display.
  */
 
-METHODDEF void
+METHODDEF(void)
 emit_message (j_common_ptr cinfo, int msg_level)
 {
   struct jpeg_error_mgr * err = cinfo->err;
@@ -112,7 +129,7 @@ emit_message (j_common_ptr cinfo, int msg_level)
  * Few applications should need to override this method.
  */
 
-METHODDEF void
+METHODDEF(void)
 format_message (j_common_ptr cinfo, char * buffer)
 {
   struct jpeg_error_mgr * err = cinfo->err;
@@ -167,7 +184,7 @@ format_message (j_common_ptr cinfo, char * buffer)
  * this method if it has additional error processing state.
  */
 
-METHODDEF void
+METHODDEF(void)
 reset_error_mgr (j_common_ptr cinfo)
 {
   cinfo->err->num_warnings = 0;
@@ -186,7 +203,7 @@ reset_error_mgr (j_common_ptr cinfo)
  * after which the application may override some of the methods.
  */
 
-GLOBAL struct jpeg_error_mgr *
+GLOBAL(struct jpeg_error_mgr *)
 jpeg_std_error (struct jpeg_error_mgr * err)
 {
   err->error_exit = error_exit;
@@ -200,7 +217,7 @@ jpeg_std_error (struct jpeg_error_mgr * err)
   err->msg_code = 0;		/* may be useful as a flag for "no error" */
 
   /* Initialize message table pointers */
-  err->jpeg_message_table = jpeg_message_table;
+  err->jpeg_message_table = jpeg_std_message_table;
   err->last_jpeg_message = (int) JMSG_LASTMSGCODE - 1;
 
   err->addon_message_table = NULL;

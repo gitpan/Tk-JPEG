@@ -1,6 +1,6 @@
 INSTALLATION INSTRUCTIONS for the Independent JPEG Group's JPEG software
 
-Copyright (C) 1991-1994, Thomas G. Lane.
+Copyright (C) 1991-1996, Thomas G. Lane.
 This file is part of the Independent JPEG Group's software.
 For conditions of distribution and use, see the accompanying README file.
 
@@ -102,13 +102,16 @@ For example, on HP-UX you probably want to say
 	./configure CC='cc -Aa'
 to get HP's compiler to run in ANSI mode.
 
+* The default CFLAGS setting is "-O".  You can override this by saying,
+for example, ./configure CFLAGS='-O2'.
+
 * Configure will set up the makefile so that "make install" will install files
 into /usr/local/bin, /usr/local/man, etc.  You can specify an installation
 prefix other than "/usr/local" by giving configure the option "--prefix=PATH".
 
 * If you don't have a lot of swap space, you may need to enable the IJG
 software's internal virtual memory mechanism.  To do this, give the option
-"--with-maxmem=N" where N is the default maxmemory limit in megabytes.
+"--enable-maxmem=N" where N is the default maxmemory limit in megabytes.
 This is discussed in more detail under "Selecting a memory manager", below.
 You probably don't need to worry about this on reasonably-sized Unix machines,
 unless you plan to process very large images.
@@ -129,15 +132,16 @@ Makefile	jconfig file	System and/or compiler
 makefile.manx	jconfig.manx	Amiga, Manx Aztec C
 makefile.sas	jconfig.sas	Amiga, SAS C
 mak*jpeg.st	jconfig.st	Atari ST/STE/TT, Pure C or Turbo C
-makefile.bcc	jconfig.bcc	MS-DOS, Borland C (Turbo C)
+makefile.bcc	jconfig.bcc	MS-DOS or OS/2, Borland C
 makefile.dj	jconfig.dj	MS-DOS, DJGPP (Delorie's port of GNU C)
 makefile.mc6	jconfig.mc6	MS-DOS, Microsoft C version 6.x and up
+makefile.wat	jconfig.wat	MS-DOS, OS/2, or Windows NT, Watcom C
 makefile.mms	jconfig.vms	Digital VMS, with MMS software
 makefile.vms	jconfig.vms	Digital VMS, without MMS software
 
 Copy the proper jconfig file to jconfig.h and the makefile to Makefile
 (or whatever your system uses as the standard makefile name).  For the
-Atari, we provide three project files; see the Atari hints below.
+Atari, we provide four project files; see the Atari hints below.
 
 
 Configuring the software by hand
@@ -173,14 +177,14 @@ ckconfig.c to work, make sure the same switches are in CFLAGS.
 
 If you are on a system that doesn't use makefiles, you'll need to set up
 project files (or whatever you do use) to compile all the source files and
-link them into executable files cjpeg, djpeg, rdjpgcom, and wrjpgcom.  See
-the file lists in any of the makefiles to find out which files go into each
-program.  Note that the provided makefiles all make a "library" file libjpeg
-first, but you don't have to do that if you don't want to; the file lists
-identify which source files are actually needed for compression,
+link them into executable files cjpeg, djpeg, jpegtran, rdjpgcom, and wrjpgcom.
+See the file lists in any of the makefiles to find out which files go into
+each program.  Note that the provided makefiles all make a "library" file
+libjpeg first, but you don't have to do that if you don't want to; the file
+lists identify which source files are actually needed for compression,
 decompression, or both.  As a last resort, you can make a batch script that
-just compiles everything and links it all together; makefile.vms is an
-example of this (it's for VMS systems that have no make-like utility).
+just compiles everything and links it all together; makefile.vms is an example
+of this (it's for VMS systems that have no make-like utility).
 
 Here are comments about some specific configuration decisions you'll
 need to make:
@@ -188,7 +192,7 @@ need to make:
 Command line style
 ------------------
 
-cjpeg and djpeg can use a Unix-like command line style which supports
+These programs can use a Unix-like command line style which supports
 redirection and piping, like this:
 	cjpeg inputfile >outputfile
 	cjpeg <inputfile >outputfile
@@ -212,7 +216,7 @@ Selecting a memory manager
 
 The IJG code is capable of working on images that are too big to fit in main
 memory; data is swapped out to temporary files as necessary.  However, the
-code to do this is rather system-dependent.  We provide four different
+code to do this is rather system-dependent.  We provide five different
 memory managers:
 
 * jmemansi.c	This version uses the ANSI-standard library routine tmpfile(),
@@ -236,7 +240,10 @@ memory managers:
 		IMPORTANT: if you use this, define USE_MSDOS_MEMMGR in
 		jconfig.h, and include the assembly file jmemdosa.asm in the
 		programs.  The supplied makefiles and jconfig files for
-		MS-DOS compilers already do both.
+		16-bit MS-DOS compilers already do both.
+
+* jmemmac.c	Custom version for Apple Macintosh; see the system-specific
+		notes for Macintosh for more info.
 
 To use a particular memory manager, change the SYSDEPMEM variable in your
 makefile to equal the corresponding object file name (for example, jmemansi.o
@@ -249,8 +256,8 @@ If yours doesn't, try jmemansi.c first.  If that doesn't compile, you'll have
 to use jmemname.c; be sure to adjust select_file_name() for local conditions.
 You may also need to change unlink() to remove() in close_backing_store().
 
-Except with jmemnobs.c, you need to adjust the DEFAULT_MAX_MEM setting to a
-reasonable value for your system (either by adding a #define for
+Except with jmemnobs.c or jmemmac.c, you need to adjust the DEFAULT_MAX_MEM
+setting to a reasonable value for your system (either by adding a #define for
 DEFAULT_MAX_MEM to jconfig.h, or by adding a -D switch to the Makefile).
 This value limits the amount of data space the program will attempt to
 allocate.  Code and static data space isn't counted, so the actual memory
@@ -298,17 +305,19 @@ several forms:
 	testimg.ppm	The output of djpeg testorig.jpg
 	testimg.gif	The output of djpeg -gif testorig.jpg
 	testimg.jpg	The output of cjpeg testimg.ppm
-(The two .jpg files aren't identical since JPEG is lossy.)  If you can
-generate duplicates of the testimg.* files then you probably have working
-programs.
+	testprog.jpg	Progressive-mode equivalent of testorig.jpg.
+	testimgp.jpg	The output of cjpeg -progressive -optimize testimg.ppm
+(The first- and second-generation .jpg files aren't identical since JPEG is
+lossy.)  If you can generate duplicates of the testimg* files then you
+probably have working programs.
 
 With most of the makefiles, "make test" will perform the necessary
 comparisons.
 
 If you're using a makefile that doesn't provide the test option, run djpeg
-and cjpeg by hand to generate testout.ppm, testout.gif, and testout.jpg,
-then compare these to testimg.* with whatever binary file comparison tool
-you have.  The files should be bit-for-bit identical.
+and cjpeg by hand and compare the output files to testimg* with whatever
+binary file comparison tool you have.  The files should be bit-for-bit
+identical.
 
 If the programs complain "MAX_ALLOC_CHUNK is wrong, please fix", then you
 need to reduce MAX_ALLOC_CHUNK to a value that fits in type size_t.
@@ -326,9 +335,8 @@ it's a good idea to check that binary I/O through stdin/stdout actually
 works.  You should get the same results from "djpeg <testorig.jpg >out.ppm"
 as from "djpeg -outfile out.ppm testorig.jpg".  Note that the makefiles all
 use the latter style and therefore do not exercise stdin/stdout!  If this
-check fails, try recompiling cjpeg.c and djpeg.c with USE_SETMODE or
-USE_FDOPEN.  If it still doesn't work, better use two-file style.
-(rdjpgcom.c and wrjpgcom.c will also need to be recompiled.)
+check fails, try recompiling with USE_SETMODE or USE_FDOPEN defined.
+If it still doesn't work, better use two-file style.
 
 If you chose a memory manager other than jmemnobs.c, you should test that
 temporary-file usage works.  Try "djpeg -gif -max 0 testorig.jpg" and make
@@ -346,11 +354,12 @@ INSTALLING THE SOFTWARE
 =======================
 
 Once you're done with the above steps, you can install the software by
-copying the executable files (cjpeg, djpeg, rdjpgcom, and wrjpgcom) to
-wherever you normally install programs.  On Unix systems, you'll also want
-to put the man pages (cjpeg.1, djpeg.1, rdjpgcom.1, wrjpgcom.1) in the
-man-page directory.  The canned makefiles don't support this step since
-there's such a wide variety of installation procedures on different systems.
+copying the executable files (cjpeg, djpeg, jpegtran, rdjpgcom, and wrjpgcom)
+to wherever you normally install programs.  On Unix systems, you'll also want
+to put the man pages (cjpeg.1, djpeg.1, jpegtran.1, rdjpgcom.1, wrjpgcom.1)
+in the man-page directory.  The canned makefiles don't support this step
+since there's such a wide variety of installation procedures on different
+systems.
 
 If you generated a Makefile with the "configure" script, you can just say
 	make install
@@ -362,7 +371,7 @@ the Makefile, particularly if your system's conventions for man page
 filenames don't match what configure expects.
 
 If you want to install the library file libjpeg.a and the include files j*.h
-(for use in compiling other programs besides cjpeg/djpeg), then say
+(for use in compiling other programs besides the IJG ones), then say
 	make install-lib
 
 
@@ -372,9 +381,9 @@ OPTIONAL STUFF
 Progress monitor:
 
 If you like, you can #define PROGRESS_REPORT (in jconfig.h) to enable display
-of percent-done progress reports.  The routines provided in cjpeg.c/djpeg.c
-merely print percentages to stderr, but you can customize them to do
-something fancier.
+of percent-done progress reports.  The routine provided in cdjpeg.c merely
+prints percentages to stderr, but you can customize it to do something
+fancier.
 
 Utah RLE file format support:
 
@@ -389,6 +398,55 @@ support as follows:
 	3.  Add -L... -lrle to LDLIBS in the Makefile, where ... specifies
 	    the directory containing the URT "librle.a" file (typically the
 	    "lib" subdirectory of the URT distribution).
+
+Support for 12-bit-deep pixel data:
+
+The JPEG standard allows either 8-bit or 12-bit data precision.  (For color,
+this means 8 or 12 bits per channel, of course.)  If you need to work with
+deeper than 8-bit data, you can compile the IJG code for 12-bit operation.
+To do so:
+  1. In jmorecfg.h, define BITS_IN_JSAMPLE as 12 rather than 8.
+  2. In jconfig.h, undefine BMP_SUPPORTED, RLE_SUPPORTED, and TARGA_SUPPORTED,
+     because the code for those formats doesn't handle 12-bit data and won't
+     even compile.  (The PPM code does work, as explained below.  The GIF
+     code works too; it scales 8-bit GIF data to and from 12-bit depth
+     automatically.)
+  3. Compile.  Don't expect "make test" to pass, since the supplied test
+     files are for 8-bit data.
+
+Currently, 12-bit support does not work on 16-bit-int machines.
+
+Note that a 12-bit version will not read 8-bit JPEG files, nor vice versa;
+so you'll want to keep around a regular 8-bit compilation as well.
+(Run-time selection of data depth, to allow a single copy that does both,
+is possible but would probably slow things down considerably; it's very low
+on our to-do list.)
+
+The PPM reader (rdppm.c) can read 12-bit data from either text-format or
+binary-format PPM and PGM files.  Binary-format PPM/PGM files which have a
+maxval greater than 255 are assumed to use 2 bytes per sample, LSB first
+(little-endian order).  As of early 1995, 2-byte binary format is not
+officially supported by the PBMPLUS library, but it is expected that the
+next release of PBMPLUS will support it.  Note that the PPM reader will
+read files of any maxval regardless of the BITS_IN_JSAMPLE setting; incoming
+data is automatically rescaled to either maxval=255 or maxval=4095 as
+appropriate for the cjpeg bit depth.
+
+The PPM writer (wrppm.c) will normally write 2-byte binary PPM or PGM
+format, maxval 4095, when compiled with BITS_IN_JSAMPLE=12.  Since this
+format is not yet widely supported, you can disable it by compiling wrppm.c
+with PPM_NORAWWORD defined; then the data is scaled down to 8 bits to make a
+standard 1-byte/sample PPM or PGM file.  (Yes, this means still another copy
+of djpeg to keep around.  But hopefully you won't need it for very long.
+Poskanzer's supposed to get that new PBMPLUS release out Real Soon Now.)
+
+Of course, if you are working with 12-bit data, you probably have it stored
+in some other, nonstandard format.  In that case you'll probably want to
+write your own I/O modules to read and write your format.
+
+Note that a 12-bit version of cjpeg always runs in "-optimize" mode, in
+order to generate valid Huffman tables.  This is necessary because our
+default Huffman tables only cover 8-bit data.
 
 Removing code:
 
@@ -426,9 +484,9 @@ defining SHORTxSHORT_32 is fairly likely to work.  When experimenting with
 alternate definitions, be sure to test not only whether the code still works
 (use the self-test), but also whether it is actually faster --- on some
 compilers, alternate definitions may compute the right answer, yet be slower
-than the default.  Timing cjpeg on a large PPM input file is the best way to
-check this, as the DCT will be the largest fraction of the runtime in that
-mode.  (Note: some of the distributed compiler-specific jconfig files
+than the default.  Timing cjpeg on a large PGM (grayscale) input file is the
+best way to check this, as the DCT will be the largest fraction of the runtime
+in that mode.  (Note: some of the distributed compiler-specific jconfig files
 already contain #define switches to select appropriate MULTIPLYxxx
 definitions.)
 
@@ -500,17 +558,21 @@ Amiga:
 SAS C 6.50 reportedly is too buggy to compile the IJG code properly.
 A patch to update to 6.51 is available from SAS or AmiNet FTP sites.
 
+The supplied config files are set up to use jmemname.c as the memory
+manager, with temporary files being created on the device named by
+"JPEGTMP:".
+
 
 Atari ST/STE/TT:
  
-Copy the project files makcjpeg.st, makdjpeg.st, and makljpeg.st to cjpeg.prj,
-djpeg.prj, and libjpeg.prj respectively.  The project files should work as-is
-with Pure C.  For Turbo C, change library filenames "PC..." to "TC..." in
-cjpeg.prj and djpeg.prj.  Note that libjpeg.prj selects jmemansi.c as the
-recommended memory manager.  You'll probably want to adjust the
-DEFAULT_MAX_MEM setting --- you want it to be a couple hundred K less than
-your normal free memory.  Put "#define DEFAULT_MAX_MEM nnnn" into jconfig.h
-to do this.
+Copy the project files makcjpeg.st, makdjpeg.st, maktjpeg.st, and makljpeg.st
+to cjpeg.prj, djpeg.prj, jpegtran.prj, and libjpeg.prj respectively.  The
+project files should work as-is with Pure C.  For Turbo C, change library
+filenames "PC..." to "TC..." in each project file.  Note that libjpeg.prj
+selects jmemansi.c as the recommended memory manager.  You'll probably want to
+adjust the DEFAULT_MAX_MEM setting --- you want it to be a couple hundred K
+less than your normal free memory.  Put "#define DEFAULT_MAX_MEM nnnn" into
+jconfig.h to do this.
 
 To use the 68881/68882 coprocessor for the floating point DCT, add the
 compiler option "-8" to the project files and replace PCFLTLIB.LIB with
@@ -520,8 +582,8 @@ DCT_FLOAT_SUPPORTED in jmorecfg.h (since without a coprocessor, the float
 code will be too slow to be useful).  In that case, you can delete
 PCFLTLIB.LIB from the project files.
 
-Note that you must make libjpeg.lib before making cjpeg.ttp or djpeg.ttp.
-You'll have to perform the self-test by hand.
+Note that you must make libjpeg.lib before making cjpeg.ttp, djpeg.ttp,
+or jpegtran.ttp.  You'll have to perform the self-test by hand.
 
 We haven't bothered to include project files for rdjpgcom and wrjpgcom.
 Those source files should just be compiled by themselves; they don't
@@ -531,9 +593,9 @@ There is a bug in some older versions of the Turbo C library which causes the
 space used by temporary files created with "tmpfile()" not to be freed after
 an abnormal program exit.  If you check your disk afterwards, you will find
 cluster chains that are allocated but not used by a file.  This should not
-happen in cjpeg or djpeg, since we enable a signal catcher to explicitly close
-temp files before exiting.  But if you use the JPEG library with your own
-code, be sure to supply a signal catcher, or else use a different
+happen in cjpeg/djpeg/jpegtran, since we enable a signal catcher to explicitly
+close temp files before exiting.  But if you use the JPEG library with your
+own code, be sure to supply a signal catcher, or else use a different
 system-dependent memory manager.
 
 
@@ -568,6 +630,25 @@ to A.08.07.  If you get complaints about "not a typedef name", you'll have to
 use makefile.unix, or run configure without the CC option.
 
 
+Macintosh, generic comments:
+
+The supplied user-interface files (cjpeg.c, djpeg.c, etc) are set up to
+provide a Unix-style command line interface.  You can use this interface on
+the Mac by means of the ccommand() library routine provided by Metrowerks
+CodeWarrior or Think C.  This is only appropriate for testing the library,
+however; to make a user-friendly equivalent of cjpeg/djpeg you'd really want
+to develop a Mac-style user interface.  Such an interface exists for pre-v5
+IJG libraries (see the Think C entry, below) but at this writing it has not
+been updated to work with the current release.
+
+We recommend replacing "malloc" and "free" by "NewPtr" and "DisposePtr" in
+whichever memory manager back end you use, because Mac C libraries often
+have inferior implementations of malloc/free.  jmemmac.c is recommended;
+it is a customized version of jmemansi.c with this change and a Mac-specific
+implementation of jpeg_mem_available().  You can also use jmemnobs.c if you
+don't care about handling images larger than available memory.
+
+
 Macintosh, MPW:
 
 We don't directly support MPW in the current release, but Larry Rosenstein
@@ -581,8 +662,10 @@ Macintosh, Metrowerks CodeWarrior:
 Metrowerks release DR2 has problems with the IJG code; don't use it.  Release
 DR3.5 or later should be OK.
 
-The command-line-style interface can be used by defining USE_CCOMMAND and
-TWO_FILE_COMMANDLINE (see next entry for more details).
+The Unix-command-line-style interface can be used by defining USE_CCOMMAND.
+You'll also need to define either TWO_FILE_COMMANDLINE (to avoid stdin/stdout)
+or USE_FDOPEN (to make stdin/stdout work in binary mode).  See the Think C
+entry for more details.
 
 On 680x0 Macs, Metrowerks defines type "double" as a 10-byte IEEE extended
 float.  jmemmgr.c won't like this: it wants sizeof(ALIGN_TYPE) to be a power
@@ -591,15 +674,12 @@ of 2.  Add "#define ALIGN_TYPE long" to jconfig.h to eliminate the complaint.
 
 Macintosh, Think C:
 
-The supplied user-interface files (cjpeg.c and djpeg.c) are set up to provide
-a Unix-style command line interface.  You can use this interface on the Mac
-by means of Think's ccommand() library routine.  However, a much better
-Mac-style user interface has been prepared by Jim Brunner.  You can obtain
-the additional source code needed for that user interface by FTP to
-sumex-aim.stanford.edu, file /info-mac/dev/src/jpeg-convert-c.hqx.  Jim's
-documentation also includes more detailed build instructions for Think C.
-(Jim is working on updating this code to work with v5 of the IJG library,
-but it wasn't ready as of v5 release time.  Should be out before too long.)
+Jim Brunner has prepared a Mac-style user interface for the IJG library.
+Unfortunately, the released version of it only works with pre-v5 libraries;
+still, it may be a useful starting point.  You can obtain Jim's additional
+source code from the Info-Mac archives, at sumex-aim.stanford.edu or mirrors
+thereof; see file /info-mac/dev/src/jpeg-convert-c.hqx.  Jim's documentation
+also includes more detailed build instructions for Think C.
 
 If you want to build the minimal command line version, proceed as follows.
 You'll have to prepare project files for the programs; we don't include any
@@ -641,7 +721,8 @@ The DOS-specific memory manager, jmemdos.c, should be used if possible.
 It needs some assembly-code routines which are in jmemdosa.asm; make sure
 your makefile assembles that file and includes it in the library.  If you
 don't have a suitable assembler, you can get pre-assembled object files for
-jmemdosa by FTP from ftp.uu.net: graphics/jpeg/jdosaobj.zip.
+jmemdosa by FTP from ftp.uu.net: graphics/jpeg/jdosaobj.zip.  (DOS-oriented
+distributions of the IJG source code often include these object files.)
 
 When using jmemdos.c, jconfig.h must define USE_MSDOS_MEMMGR and must set
 MAX_ALLOC_CHUNK to less than 64K (65520L is a typical value).  If your
@@ -686,13 +767,15 @@ See the last paragraph of the previous section.
 
 MS-DOS, Borland C:
 
-If you want one-file command line style, just undefine TWO_FILE_COMMANDLINE.
-jconfig.bcc includes #define USE_SETMODE.  (fdopen does not work correctly.)
-
 Be sure to convert all the source files to DOS text format (CR/LF newlines).
 Although Borland C will often work OK with unmodified Unix (LF newlines)
 source files, sometimes it will give bogus compile errors.
-"Illegal character '#'" is the most common such error.
+"Illegal character '#'" is the most common such error.  (This is true with
+Borland C 3.1, but perhaps is fixed in newer releases.)
+
+If you want one-file command line style, just undefine TWO_FILE_COMMANDLINE.
+jconfig.bcc already includes #define USE_SETMODE to make this work.
+(fdopen does not work correctly.)
 
 
 MS-DOS, DJGPP:
@@ -708,8 +791,17 @@ go32.exe to do "make standalone".
 
 MS-DOS, Microsoft C:
 
+makefile.mc6 works with Microsoft C, Visual C++, etc.  Note that this
+makefile assumes that the working copy of itself is called "makefile".
+If you want to call it something else, say "makefile.mak", be sure to adjust
+the dependency line that reads "$(RFILE) : makefile".  Otherwise the make
+will fail because it doesn't know how to create "makefile".  Worse, some
+releases of Microsoft's make utilities give an incorrect error message in
+this situation.
+
 If you want one-file command line style, just undefine TWO_FILE_COMMANDLINE.
-jconfig.mc6 includes #define USE_SETMODE.  (fdopen does not work correctly.)
+jconfig.mc6 already includes #define USE_SETMODE to make this work.
+(fdopen does not work correctly.)
 
 Old versions of MS C fail with an "out of macro expansion space" error
 because they can't cope with the macro TRACEMS8 (defined in jerror.h).
@@ -725,11 +817,105 @@ MS C 8.0 reportedly fails to compile jquant1.c if optimization is turned off
 (yes, off).
 
 
+Microsoft Windows (all versions):
+
+Some Windows system include files define typedef boolean as "unsigned char".
+The IJG code also defines typedef boolean, but we make it "int" by default.
+This doesn't affect the IJG programs because we don't import those Windows
+include files.  But if you use the JPEG library in your own program, and some
+of your program's files import one definition of boolean while some import the
+other, you can get all sorts of mysterious problems.  A good preventive step
+is to change jmorecfg.h to define boolean as unsigned char.  We recommend
+making that part of jmorecfg.h read like this:
+	#ifndef __RPCNDR_H__	/* don't conflict if rpcndr.h already read */
+	typedef unsigned char boolean;
+	#endif
+In v6a and later, using incompatible definitions of boolean will usually lead
+to the failure message "JPEG parameter struct mismatch", rather than the
+difficult-to-diagnose bugs it caused with earlier versions.
+
+When using the library in a Windows application, you will almost certainly
+want to modify or replace the error handler module jerror.c, since our
+default error handler does a couple of inappropriate things:
+  1. it tries to write error and warning messages on stderr;
+  2. in event of a fatal error, it exits by calling exit().
+A simple stopgap solution for problem 1 is to replace the line
+	fprintf(stderr, "%s\n", buffer);
+(in output_message in jerror.c) with something like
+	MessageBox(GetActiveWindow(),buffer,"JPEG Error",MB_OK);
+It's highly recommended that you at least do that much, since otherwise
+error messages will disappear into nowhere.
+The proper solution for problem 2 is to return control to your calling
+application after a library error.  This can be done with the setjmp/longjmp
+technique discussed in libjpeg.doc and illustrated in example.c.
+
+You may also want to modify jdatasrc.c and jdatadst.c to use Windows file
+operations rather than fread/fwrite.  This is only necessary if your C
+compiler doesn't provide a competent implementation of C stdio functions.
+
+Many people want to convert the IJG library into a DLL.  This is reasonably
+straightforward, but watch out for the following:
+  1. Don't try to compile as a DLL in small or medium memory model; use
+large model, or even better, 32-bit flat model.  Many places in the IJG code
+assume the address of a local variable is an ordinary (not FAR) pointer;
+that isn't true in a medium-model DLL.
+  2. Microsoft C cannot pass file pointers between applications and DLLs.
+(See Microsoft Knowledge Base, PSS ID Number Q50336.)  So jdatasrc.c and
+jdatadst.c don't work if you open a file in your application and then pass
+the pointer to the DLL.  One workaround is to make jdatasrc.c/jdatadst.c
+part of your main application rather than part of the DLL.
+  3. You'll probably need to modify the macros GLOBAL() and EXTERN() to
+attach suitable linkage keywords to the exported routine names.  Similarly,
+you'll want to modify METHODDEF() and JMETHOD() to ensure function pointers
+are declared in a way that lets application routines be called back through
+the function pointers.  These macros are in jmorecfg.h.  Typical definitions
+for a 16-bit DLL are:
+	#define GLOBAL(type)		type _far _pascal _loadds _export
+	#define EXTERN(type)		extern type _far _pascal
+	#define METHODDEF(type)		static type _far _pascal
+	#define JMETHOD(type,methodname,arglist)  \
+		type (_far _pascal *methodname) arglist
+Although not all the GLOBAL routines are actually intended to be called by
+the application, the performance cost of making them all DLL entry points is
+negligible.
+
+The unmodified IJG library presents a very C-specific application interface,
+so the resulting DLL is only usable from C or C++ applications.  There has
+been some talk of writing wrapper code that would present a simpler interface
+usable from other languages, such as Visual Basic.  This is on our to-do list
+but hasn't been very high priority --- any volunteers out there?
+
+
+Microsoft Windows, Borland C:
+
+Borland C++ 4.5 fails with an internal compiler error when trying to compile
+jdmerge.c in 32-bit mode.  If enough people complain, perhaps Borland will fix
+it.  In the meantime, the simplest known workaround is to add a redundant
+definition of the variable range_limit in h2v1_merged_upsample(), at the head
+of the block that handles odd image width (about line 268 in v6 jdmerge.c):
+  /* If image width is odd, do the last output column separately */
+  if (cinfo->output_width & 1) {
+    register JSAMPLE * range_limit = cinfo->sample_range_limit; /* ADD THIS */
+    cb = GETJSAMPLE(*inptr1);
+Pretty bizarre, especially since the very similar routine h2v2_merged_upsample
+doesn't trigger the bug.
+Recent reports suggest that this bug does not occur with "bcc32a" (the
+Pentium-optimized version of the compiler).
+
+
 SGI:
 
-Set "AR2= ar -ts" rather than "AR2= ranlib" in the Makefile.  If you are
-using configure, you should say
+On some SGI systems, you may need to set "AR2= ar -ts" in the Makefile.
+If you are using configure, you can do this by saying
 	./configure RANLIB='ar -ts'
+This change is not needed on all SGIs.  Use it only if the make fails at the
+stage of linking the completed programs.
+
+On the MIPS R4000 architecture (Indy, etc.), the compiler option "-mips2"
+reportedly speeds up the float DCT method substantially, enough to make it
+faster than the default int method (but still slower than the fast int
+method).  If you use -mips2, you may want to alter the default DCT method to
+be float.  To do this, put "#define JDCT_DEFAULT JDCT_FLOAT" in jconfig.h.
 
 
 VMS:
@@ -738,8 +924,8 @@ On an Alpha/VMS system with MMS, be sure to use the "/Marco=Alpha=1"
 qualifier with MMS when building the JPEG package.
 
 VAX/VMS v5.5-1 may have problems with the test step of the build procedure
-reporting differences when it compares the original and test GIF and JPG
-images.  If the error points to the last block of the files, it is most
-likely bogus and may be safely ignored.  It seems to be because the files
-are Stream_LF and Backup/Compare has difficulty with the (presumably) null
-padded files.  This problem was not observed on VAX/VMS v6.1 or AXP/VMS v6.1.
+reporting differences when it compares the original and test images.  If the
+error points to the last block of the files, it is most likely bogus and may
+be safely ignored.  It seems to be because the files are Stream_LF and
+Backup/Compare has difficulty with the (presumably) null padded files.
+This problem was not observed on VAX/VMS v6.1 or AXP/VMS v6.1.

@@ -1,7 +1,7 @@
 /*
  * wrrle.c
  *
- * Copyright (C) 1991-1994, Thomas G. Lane.
+ * Copyright (C) 1991-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -62,7 +62,7 @@ typedef struct {
 typedef rle_dest_struct * rle_dest_ptr;
 
 /* Forward declarations */
-METHODDEF void rle_put_pixel_rows
+METHODDEF(void) rle_put_pixel_rows
     JPP((j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 	 JDIMENSION rows_supplied));
 
@@ -73,7 +73,7 @@ METHODDEF void rle_put_pixel_rows
  * In this module it's easier to wait till finish_output to write anything.
  */
 
-METHODDEF void
+METHODDEF(void)
 start_output_rle (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 {
   rle_dest_ptr dest = (rle_dest_ptr) dinfo;
@@ -130,7 +130,7 @@ start_output_rle (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 
   /* Set the output buffer to the first row */
   dest->pub.buffer = (*cinfo->mem->access_virt_sarray)
-    ((j_common_ptr) cinfo, dest->image, (JDIMENSION) 0, TRUE);
+    ((j_common_ptr) cinfo, dest->image, (JDIMENSION) 0, (JDIMENSION) 1, TRUE);
   dest->pub.buffer_height = 1;
 
   dest->pub.put_pixel_rows = rle_put_pixel_rows;
@@ -149,7 +149,7 @@ start_output_rle (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
  * This routine just saves the data away in a virtual array.
  */
 
-METHODDEF void
+METHODDEF(void)
 rle_put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 		    JDIMENSION rows_supplied)
 {
@@ -157,7 +157,8 @@ rle_put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 
   if (cinfo->output_scanline < cinfo->output_height) {
     dest->pub.buffer = (*cinfo->mem->access_virt_sarray)
-      ((j_common_ptr) cinfo, dest->image, cinfo->output_scanline, TRUE);
+      ((j_common_ptr) cinfo, dest->image,
+       cinfo->output_scanline, (JDIMENSION) 1, TRUE);
   }
 }
 
@@ -167,7 +168,7 @@ rle_put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
  * Here is where we really output the RLE file.
  */
 
-METHODDEF void
+METHODDEF(void)
 finish_output_rle (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 {
   rle_dest_ptr dest = (rle_dest_ptr) dinfo;
@@ -221,7 +222,8 @@ finish_output_rle (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
   if (cinfo->output_components == 1) {
     for (row = cinfo->output_height-1; row >= 0; row--) {
       rle_row = (rle_pixel **) (*cinfo->mem->access_virt_sarray)
-        ((j_common_ptr) cinfo, dest->image, (JDIMENSION) row, FALSE);
+        ((j_common_ptr) cinfo, dest->image,
+	 (JDIMENSION) row, (JDIMENSION) 1, FALSE);
       rle_putrow(rle_row, (int) cinfo->output_width, &header);
 #ifdef PROGRESS_REPORT
       if (progress != NULL) {
@@ -234,7 +236,8 @@ finish_output_rle (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
     for (row = cinfo->output_height-1; row >= 0; row--) {
       rle_row = (rle_pixel **) dest->rle_row;
       output_row = * (*cinfo->mem->access_virt_sarray)
-        ((j_common_ptr) cinfo, dest->image, (JDIMENSION) row, FALSE);
+        ((j_common_ptr) cinfo, dest->image,
+	 (JDIMENSION) row, (JDIMENSION) 1, FALSE);
       red = rle_row[0];
       green = rle_row[1];
       blue = rle_row[2];
@@ -270,7 +273,7 @@ finish_output_rle (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
  * The module selection routine for RLE format output.
  */
 
-GLOBAL djpeg_dest_ptr
+GLOBAL(djpeg_dest_ptr)
 jinit_write_rle (j_decompress_ptr cinfo)
 {
   rle_dest_ptr dest;
@@ -292,7 +295,7 @@ jinit_write_rle (j_decompress_ptr cinfo)
 
   /* Allocate a virtual array to hold the image. */
   dest->image = (*cinfo->mem->request_virt_sarray)
-    ((j_common_ptr) cinfo, JPOOL_IMAGE,
+    ((j_common_ptr) cinfo, JPOOL_IMAGE, FALSE,
      (JDIMENSION) (cinfo->output_width * cinfo->output_components),
      cinfo->output_height, (JDIMENSION) 1);
 

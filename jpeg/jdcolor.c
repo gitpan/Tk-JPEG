@@ -1,7 +1,7 @@
 /*
  * jdcolor.c
  *
- * Copyright (C) 1991-1994, Thomas G. Lane.
+ * Copyright (C) 1991-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -37,7 +37,7 @@ typedef my_color_deconverter * my_cconvert_ptr;
  *	R = Y                + 1.40200 * Cr
  *	G = Y - 0.34414 * Cb - 0.71414 * Cr
  *	B = Y + 1.77200 * Cb
- * where Cb and Cr represent the incoming values less MAXJSAMPLE/2.
+ * where Cb and Cr represent the incoming values less CENTERJSAMPLE.
  * (These numbers are derived from TIFF 6.0 section 21, dated 3-June-92.)
  *
  * To avoid floating-point arithmetic, we represent the fractional constants
@@ -63,14 +63,15 @@ typedef my_color_deconverter * my_cconvert_ptr;
 
 
 /*
- * Initialize for YCC->RGB colorspace conversion.
+ * Initialize tables for YCC->RGB colorspace conversion.
  */
 
-METHODDEF void
-ycc_rgb_start (j_decompress_ptr cinfo)
+LOCAL(void)
+build_ycc_rgb_table (j_decompress_ptr cinfo)
 {
   my_cconvert_ptr cconvert = (my_cconvert_ptr) cinfo->cconvert;
-  INT32 i, x2;
+  int i;
+  INT32 x;
   SHIFT_TEMPS
 
   cconvert->Cr_r_tab = (int *)
@@ -86,21 +87,20 @@ ycc_rgb_start (j_decompress_ptr cinfo)
     (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
 				(MAXJSAMPLE+1) * SIZEOF(INT32));
 
-  for (i = 0; i <= MAXJSAMPLE; i++) {
+  for (i = 0, x = -CENTERJSAMPLE; i <= MAXJSAMPLE; i++, x++) {
     /* i is the actual input pixel value, in the range 0..MAXJSAMPLE */
-    /* The Cb or Cr value we are thinking of is x = i - MAXJSAMPLE/2 */
-    x2 = 2*i - MAXJSAMPLE;	/* twice x */
+    /* The Cb or Cr value we are thinking of is x = i - CENTERJSAMPLE */
     /* Cr=>R value is nearest int to 1.40200 * x */
     cconvert->Cr_r_tab[i] = (int)
-		    RIGHT_SHIFT(FIX(1.40200/2) * x2 + ONE_HALF, SCALEBITS);
+		    RIGHT_SHIFT(FIX(1.40200) * x + ONE_HALF, SCALEBITS);
     /* Cb=>B value is nearest int to 1.77200 * x */
     cconvert->Cb_b_tab[i] = (int)
-		    RIGHT_SHIFT(FIX(1.77200/2) * x2 + ONE_HALF, SCALEBITS);
+		    RIGHT_SHIFT(FIX(1.77200) * x + ONE_HALF, SCALEBITS);
     /* Cr=>G value is scaled-up -0.71414 * x */
-    cconvert->Cr_g_tab[i] = (- FIX(0.71414/2)) * x2;
+    cconvert->Cr_g_tab[i] = (- FIX(0.71414)) * x;
     /* Cb=>G value is scaled-up -0.34414 * x */
     /* We also add in ONE_HALF so that need not do it in inner loop */
-    cconvert->Cb_g_tab[i] = (- FIX(0.34414/2)) * x2 + ONE_HALF;
+    cconvert->Cb_g_tab[i] = (- FIX(0.34414)) * x + ONE_HALF;
   }
 }
 
@@ -116,7 +116,7 @@ ycc_rgb_start (j_decompress_ptr cinfo)
  * offset required on that side.
  */
 
-METHODDEF void
+METHODDEF(void)
 ycc_rgb_convert (j_decompress_ptr cinfo,
 		 JSAMPIMAGE input_buf, JDIMENSION input_row,
 		 JSAMPARRAY output_buf, int num_rows)
@@ -145,10 +145,7 @@ ycc_rgb_convert (j_decompress_ptr cinfo,
       y  = GETJSAMPLE(inptr0[col]);
       cb = GETJSAMPLE(inptr1[col]);
       cr = GETJSAMPLE(inptr2[col]);
-      /* Note: if the inputs were computed directly from RGB values,
-       * range-limiting would be unnecessary here; but due to possible
-       * noise in the DCT/IDCT phase, we do need to apply range limits.
-       */
+      /* Range-limiting is essential due to noise introduced by DCT losses. */
       outptr[RGB_RED] =   range_limit[y + Crrtab[cr]];
       outptr[RGB_GREEN] = range_limit[y +
 			      ((int) RIGHT_SHIFT(Cbgtab[cb] + Crgtab[cr],
@@ -168,14 +165,14 @@ ycc_rgb_convert (j_decompress_ptr cinfo,
  * converting from separate-planes to interleaved representation.
  */
 
-METHODDEF void
+METHODDEF(void)
 null_convert (j_decompress_ptr cinfo,
 	      JSAMPIMAGE input_buf, JDIMENSION input_row,
 	      JSAMPARRAY output_buf, int num_rows)
 {
   register JSAMPROW inptr, outptr;
   register JDIMENSION count;
-  register int num_components = cinfo->output_components;
+  register int num_components = cinfo->num_components;
   JDIMENSION num_cols = cinfo->output_width;
   int ci;
 
@@ -200,7 +197,7 @@ null_convert (j_decompress_ptr cinfo,
  * we just copy the Y (luminance) component and ignore chrominance.
  */
 
-METHODDEF void
+METHODDEF(void)
 grayscale_convert (j_decompress_ptr cinfo,
 		   JSAMPIMAGE input_buf, JDIMENSION input_row,
 		   JSAMPARRAY output_buf, int num_rows)
@@ -214,10 +211,10 @@ grayscale_convert (j_decompress_ptr cinfo,
  * Adobe-style YCCK->CMYK conversion.
  * We convert YCbCr to R=1-C, G=1-M, and B=1-Y using the same
  * conversion as above, while passing K (black) unchanged.
- * We assume ycc_rgb_start has been called.
+ * We assume build_ycc_rgb_table has been called.
  */
 
-METHODDEF void
+METHODDEF(void)
 ycck_cmyk_convert (j_decompress_ptr cinfo,
 		   JSAMPIMAGE input_buf, JDIMENSION input_row,
 		   JSAMPARRAY output_buf, int num_rows)
@@ -247,10 +244,7 @@ ycck_cmyk_convert (j_decompress_ptr cinfo,
       y  = GETJSAMPLE(inptr0[col]);
       cb = GETJSAMPLE(inptr1[col]);
       cr = GETJSAMPLE(inptr2[col]);
-      /* Note: if the inputs were computed directly from RGB values,
-       * range-limiting would be unnecessary here; but due to possible
-       * noise in the DCT/IDCT phase, we do need to apply range limits.
-       */
+      /* Range-limiting is essential due to noise introduced by DCT losses. */
       outptr[0] = range_limit[MAXJSAMPLE - (y + Crrtab[cr])];	/* red */
       outptr[1] = range_limit[MAXJSAMPLE - (y +			/* green */
 			      ((int) RIGHT_SHIFT(Cbgtab[cb] + Crgtab[cr],
@@ -268,8 +262,8 @@ ycck_cmyk_convert (j_decompress_ptr cinfo,
  * Empty method for start_pass.
  */
 
-METHODDEF void
-null_method (j_decompress_ptr cinfo)
+METHODDEF(void)
+start_pass_dcolor (j_decompress_ptr cinfo)
 {
   /* no work needed */
 }
@@ -279,7 +273,7 @@ null_method (j_decompress_ptr cinfo)
  * Module initialization routine for output colorspace conversion.
  */
 
-GLOBAL void
+GLOBAL(void)
 jinit_color_deconverter (j_decompress_ptr cinfo)
 {
   my_cconvert_ptr cconvert;
@@ -289,8 +283,7 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
     (*cinfo->mem->alloc_small) ((j_common_ptr) cinfo, JPOOL_IMAGE,
 				SIZEOF(my_color_deconverter));
   cinfo->cconvert = (struct jpeg_color_deconverter *) cconvert;
-  /* set start_pass to null method until we find out differently */
-  cconvert->pub.start_pass = null_method;
+  cconvert->pub.start_pass = start_pass_dcolor;
 
   /* Make sure num_components agrees with jpeg_color_space */
   switch (cinfo->jpeg_color_space) {
@@ -338,8 +331,8 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
   case JCS_RGB:
     cinfo->out_color_components = RGB_PIXELSIZE;
     if (cinfo->jpeg_color_space == JCS_YCbCr) {
-      cconvert->pub.start_pass = ycc_rgb_start;
       cconvert->pub.color_convert = ycc_rgb_convert;
+      build_ycc_rgb_table(cinfo);
     } else if (cinfo->jpeg_color_space == JCS_RGB && RGB_PIXELSIZE == 3) {
       cconvert->pub.color_convert = null_convert;
     } else
@@ -349,8 +342,8 @@ jinit_color_deconverter (j_decompress_ptr cinfo)
   case JCS_CMYK:
     cinfo->out_color_components = 4;
     if (cinfo->jpeg_color_space == JCS_YCCK) {
-      cconvert->pub.start_pass = ycc_rgb_start;
       cconvert->pub.color_convert = ycck_cmyk_convert;
+      build_ycc_rgb_table(cinfo);
     } else if (cinfo->jpeg_color_space == JCS_CMYK) {
       cconvert->pub.color_convert = null_convert;
     } else

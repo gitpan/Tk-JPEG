@@ -1,7 +1,7 @@
 /*
  * wrbmp.c
  *
- * Copyright (C) 1994, Thomas G. Lane.
+ * Copyright (C) 1994-1996, Thomas G. Lane.
  * This file is part of the Independent JPEG Group's software.
  * For conditions of distribution and use, see the accompanying README file.
  *
@@ -57,7 +57,7 @@ typedef bmp_dest_struct * bmp_dest_ptr;
 
 
 /* Forward declarations */
-LOCAL void write_colormap
+LOCAL(void) write_colormap
 	JPP((j_decompress_ptr cinfo, bmp_dest_ptr dest,
 	     int map_colors, int map_entry_size));
 
@@ -67,7 +67,7 @@ LOCAL void write_colormap
  * In this module rows_supplied will always be 1.
  */
 
-METHODDEF void
+METHODDEF(void)
 put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 		JDIMENSION rows_supplied)
 /* This version is for writing 24-bit pixels */
@@ -80,7 +80,8 @@ put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 
   /* Access next row in virtual array */
   image_ptr = (*cinfo->mem->access_virt_sarray)
-    ((j_common_ptr) cinfo, dest->whole_image, dest->cur_output_row, TRUE);
+    ((j_common_ptr) cinfo, dest->whole_image,
+     dest->cur_output_row, (JDIMENSION) 1, TRUE);
   dest->cur_output_row++;
 
   /* Transfer data.  Note destination values must be in BGR order
@@ -101,7 +102,7 @@ put_pixel_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
     *outptr++ = 0;
 }
 
-METHODDEF void
+METHODDEF(void)
 put_gray_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 	       JDIMENSION rows_supplied)
 /* This version is for grayscale OR quantized color output */
@@ -114,7 +115,8 @@ put_gray_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
 
   /* Access next row in virtual array */
   image_ptr = (*cinfo->mem->access_virt_sarray)
-    ((j_common_ptr) cinfo, dest->whole_image, dest->cur_output_row, TRUE);
+    ((j_common_ptr) cinfo, dest->whole_image,
+     dest->cur_output_row, (JDIMENSION) 1, TRUE);
   dest->cur_output_row++;
 
   /* Transfer data. */
@@ -136,7 +138,7 @@ put_gray_rows (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo,
  * In this module we may as well postpone everything until finish_output.
  */
 
-METHODDEF void
+METHODDEF(void)
 start_output_bmp (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 {
   /* no work here */
@@ -151,7 +153,7 @@ start_output_bmp (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
  * First, routines to write the Windows and OS/2 variants of the file header.
  */
 
-LOCAL void
+LOCAL(void)
 write_bmp_header (j_decompress_ptr cinfo, bmp_dest_ptr dest)
 /* Write a Windows-style BMP file header, including colormap if needed */
 {
@@ -224,7 +226,7 @@ write_bmp_header (j_decompress_ptr cinfo, bmp_dest_ptr dest)
 }
 
 
-LOCAL void
+LOCAL(void)
 write_os2_header (j_decompress_ptr cinfo, bmp_dest_ptr dest)
 /* Write an OS2-style BMP file header, including colormap if needed */
 {
@@ -286,7 +288,7 @@ write_os2_header (j_decompress_ptr cinfo, bmp_dest_ptr dest)
  * Windows uses BGR0 map entries; OS/2 uses BGR entries.
  */
 
-LOCAL void
+LOCAL(void)
 write_colormap (j_decompress_ptr cinfo, bmp_dest_ptr dest,
 		int map_colors, int map_entry_size)
 {
@@ -338,7 +340,7 @@ write_colormap (j_decompress_ptr cinfo, bmp_dest_ptr dest,
 }
 
 
-METHODDEF void
+METHODDEF(void)
 finish_output_bmp (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
 {
   bmp_dest_ptr dest = (bmp_dest_ptr) dinfo;
@@ -363,7 +365,7 @@ finish_output_bmp (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
       (*progress->pub.progress_monitor) ((j_common_ptr) cinfo);
     }
     image_ptr = (*cinfo->mem->access_virt_sarray)
-      ((j_common_ptr) cinfo, dest->whole_image, row-1, FALSE);
+      ((j_common_ptr) cinfo, dest->whole_image, row-1, (JDIMENSION) 1, FALSE);
     data_ptr = image_ptr[0];
     for (col = dest->row_width; col > 0; col--) {
       putc(GETJSAMPLE(*data_ptr), outfile);
@@ -384,7 +386,7 @@ finish_output_bmp (j_decompress_ptr cinfo, djpeg_dest_ptr dinfo)
  * The module selection routine for BMP format output.
  */
 
-GLOBAL djpeg_dest_ptr
+GLOBAL(djpeg_dest_ptr)
 jinit_write_bmp (j_decompress_ptr cinfo, boolean is_os2)
 {
   bmp_dest_ptr dest;
@@ -421,7 +423,7 @@ jinit_write_bmp (j_decompress_ptr cinfo, boolean is_os2)
 
   /* Allocate space for inversion array, prepare for write pass */
   dest->whole_image = (*cinfo->mem->request_virt_sarray)
-    ((j_common_ptr) cinfo, JPOOL_IMAGE,
+    ((j_common_ptr) cinfo, JPOOL_IMAGE, FALSE,
      row_width, cinfo->output_height, (JDIMENSION) 1);
   dest->cur_output_row = 0;
   if (cinfo->progress != NULL) {
